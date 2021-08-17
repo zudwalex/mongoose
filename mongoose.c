@@ -1863,6 +1863,63 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
 #endif
 
 #ifdef MG_ENABLE_LINES
+#line 1 "src/lwip_raw.c"
+#endif
+#if MG_ARCH == MG_ARCH_LWIP_RAW
+
+int usleep(useconds_t us) {
+  (void)us;
+  return 0;
+}
+
+int clock_gettime(clockid_t clock_id, struct timespec *tp) {
+  (void) clock_id; (void)tp;
+  return 0;
+}
+
+char *realpath(const char *path, char *resolved_path) {
+  (void)path; (void)resolved_path; 
+  return NULL;
+}
+
+struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
+                                 mg_event_handler_t fn, void *fn_data) {
+  (void) mgr, (void) url, (void) fn, (void) fn_data;
+  return NULL;
+}
+
+void mg_connect_resolved(struct mg_connection *c) {
+  (void) c;
+}
+
+void mg_mgr_poll(struct mg_mgr *mgr, int ms) {
+  (void) mgr, (void) ms;
+}
+
+bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
+  return true;
+}
+
+void mg_mgr_wakeup(struct mg_connection *c) {
+  (void) c;
+}
+
+struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
+                                void *fn_data) {
+  (void) mgr, (void) fn, (void) fn_data;
+  return NULL;
+}
+
+struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
+                                mg_event_handler_t fn, void *fn_data) {
+  struct mg_connection *c = NULL;
+  bool is_udp = strncmp(url, "udp:", 4) == 0;
+  return NULL;
+}
+
+#endif
+
+#ifdef MG_ENABLE_LINES
 #line 1 "src/md5.c"
 #endif
 #include <string.h>
