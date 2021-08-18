@@ -64,6 +64,8 @@ struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn,
 #endif
 
 struct mg_lwip_conn_state {
+  struct mg_connection *nc;
+  struct mg_connection *lc;
   union {
     struct tcp_pcb *tcp;
     struct udp_pcb *udp;
@@ -80,32 +82,53 @@ struct mg_lwip_conn_state {
   int draining_rx_chain;
 };
 
-static bool mg_lwip_if_listen_tcp_tcpip(struct mg_connection *nc,  union usa *sa) {
-  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->sock;
+static struct mg_connection* mg_lwip_if_create_conn() {
+  struct mg_connection* nc =
+      (struct mg_connection *) calloc(1, sizeof(*nc));
+  struct mg_lwip_conn_state *cs =
+      (struct mg_lwip_conn_state *) calloc(1, sizeof(*cs));
+  if (cs == NULL) return 0;
+  cs->nc = nc;
+  nc->fd = (void*) cs;
+  return nc;
+}
+
+
+static int mg_lwip_if_listen_tcp_tcpip(struct mg_connection *nc) {
+  struct mg_lwip_conn_state *cs = (struct mg_lwip_conn_state *) nc->fd;
   struct tcp_pcb *tpcb = TCP_NEW();
-  ip_addr_t *ip = (ip_addr_t *) &sa->sin.sin_addr.s_addr;
-  u16_t port = ntohs(sa->sin.sin_port);
+  ip_addr_t *ip = (ip_addr_t *) &nc->peer.ip;
+  u16_t port = ntohs(nc->peer.port);
   cs->err = TCP_BIND(tpcb, ip, port);
-  DBG(("%p tcp_bind(%s:%u) = %d", nc, IPADDR_NTOA(ip), port, cs->err));
+  // DBG(("%p tcp_bind(%s:%u) = %d", nc, IPADDR_NTOA(ip), port, cs->err));
   if (cs->err != ERR_OK) {
     tcp_close(tpcb);
-    return false;
+    return -1;
   }
   tcp_arg(tpcb, nc);
   tpcb = tcp_listen(tpcb);
   cs->pcb.tcp = tpcb;
   // tcp_accept(tpcb, mg_lwip_accept_cb);
-  return true;
+  return 0;
 }
 
 struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
                                 mg_event_handler_t fn, void *fn_data) {
-  struct mg_connection *c = NULL;
+  struct mg_connection *c;
+  struct mg_addr addr;
+
+  addr.port = mg_htons(mg_url_port(url));
+  if (!mg_aton(mg_url_host(url), &addr)) {
+    LOG(LL_ERROR, ("invalid listening URL: %s", url));
+    return NULL;
+  }
   bool is_udp = strncmp(url, "udp:", 4) == 0;
+  c = mg_lwip_if_create_conn();
+
   if (is_udp) {
 
   } else {
-    mg_lwip_if_listen_tcp_tcpip
+
   }
   
   return NULL;

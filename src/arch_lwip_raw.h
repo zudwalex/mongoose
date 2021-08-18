@@ -22,6 +22,10 @@
 #include <lwip/inet.h>
 #include <lwip/netdb.h>
 #include <lwip/dns.h>
+#include <lwip/init.h>
+#include <lwip/pbuf.h>
+#include <lwip/tcp.h>
+#include <lwip/tcpip.h>
 
 #ifndef LWIP_PROVIDE_ERRNO
 #include <errno.h>
