@@ -69,8 +69,10 @@ Each connection has a send and receive buffer:
 
 When data arrives, Mongoose appends received data to the `recv` and triggers an
 `MG_EV_READ` event. The user may send data back by calling one of the output
-functions, like `mg_send()`, `mg_printf()` or protocol specific function like `mg_ws_send`. Output functions append data to the `send` buffer.  When Mongoose successfully writes data to the socket, it discards data from struct `mg_connection::send` and sends an `MG_EV_SEND`
-event.
+functions, like `mg_send()`, `mg_printf()` or protocol specific function like 
+`mg_ws_send`. Output functions append data to the `send` buffer.  When Mongoose 
+successfully writes data to the socket, it discards data from struct `mg_connection::send` 
+and sends an `MG_EV_SEND` event.
 
 ## Event handler function
 
@@ -191,7 +193,9 @@ $ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
 $ cc app3.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_ENABLE_LOG=0  # Multiple options
 ```
 
-The list of supported architectures is defined in the [arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header file. Normally, there is no need to explicitly specify the architecture.  The architecture is guessed during the build, so setting it is not usually required.
+The list of supported architectures is defined in the [arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) 
+header file. Normally, there is no need to explicitly specify the architecture.  
+The architecture is guessed during the build, so setting it is not usually required.
 
 | Name | Description |
 | ---- | ----------- |
@@ -256,7 +260,9 @@ you have enabled - see previous section. Below is an example:
 #define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
 ```
 
-3. This step is optional. If you have disabled BSD socket API, your build is going to fail due to several undefined symbols. Create `mongoose_custom.c` and implement the following functions (take a look at `src/sock.c` for the reference implementation):
+3. This step is optional. If you have disabled BSD socket API, your build is going 
+to fail due to several undefined symbols. Create `mongoose_custom.c` and implement 
+the following functions (take a look at `src/sock.c` for the reference implementation):
 
 ```c
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
@@ -524,7 +530,9 @@ Create an outbound connection, append this connection to `mgr->conns`.
 
 Return value: created connection, or `NULL` on error.
 
-Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
+Note: this function does not connect to peer, it allocates required resources and 
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent 
+to connection event handler.
 
 Usage example:
 
@@ -733,7 +741,8 @@ Structure represents the HTTP message.
 ### mg\_http\_listen()
 
 ```c
-struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url, mg_event_handler_t fn, void *fn_data);
+struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
+                                     mg_event_handler_t fn, void *fn_data);
 ```
 
 Create HTTP listener.
@@ -771,7 +780,9 @@ Create HTTP client connection.
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
-Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
+Note: this function does not connect to peer, it allocates required resources and 
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is 
+sent to connection event handler.
 
 Usage example: 
 
@@ -802,7 +813,8 @@ int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 
 Return length of request in `buf` (with maximum len `buf_len`).
 
-The length of request is a number of bytes till the end of HTTP headers. It does not include length of HTTP body. 
+The length of request is a number of bytes till the end of HTTP headers. It does 
+not include length of HTTP body. 
 Return value: -1 on error, 0 if a message is incomplete, or the length of request. 
 
 Usage example:
@@ -825,7 +837,8 @@ int req_len = mg_http_get_request_len(buf, buf_len); // req_len is now 12
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm);
 ```
 
-Parse string `s` (with maximum size `len`) into a structure `hm`. Return request length - see `mg_http_get_request_len()`.
+Parse string `s` (with maximum size `len`) into a structure `hm`. Return request
+ length - see `mg_http_get_request_len()`.
 
 Usage example:
 
@@ -1042,7 +1055,8 @@ if(mg_http_get_var(&body, "key1", buf, sizeof(buf)) {
 ### mg\_http\_creds()
 
 ```c
-void mg_http_creds(struct mg_http_message *, char *user, size_t userlen, char *pass, size_t passlen);
+void mg_http_creds(struct mg_http_message *, char *user, size_t userlen, 
+                   char *pass, size_t passlen);
 ```
 
 Fetch authentication credential from the request, and store into the
@@ -1177,7 +1191,8 @@ size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_
 ```
 
 Parse the multipart chunk in the `body` at a given `offset`. An initial
-`offset` should be 0. Fill up parameters in the provided `part`, which could be NULL. Return offset to the next chunk, or 0 if there are no more chunks.
+`offset` should be 0. Fill up parameters in the provided `part`, which could be 
+NULL. Return offset to the next chunk, or 0 if there are no more chunks.
 
 See [examples/form-upload](../examples/form-upload) for full usage example.
 
@@ -1228,7 +1243,9 @@ Create client Websocket connection.
   structure as `c->fn_data`
 - `fmt` - printf-like format string for additional HTTP headers, or NULL
 
-Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
+Note: this function does not connect to peer, it allocates required resources and
+ starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
+ sent to connection event handler.
 
 Usage example: 
 
@@ -1422,7 +1439,9 @@ Create client MQTT connection.
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
-Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
+Note: this function does not connect to peer, it allocates required resources and 
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is 
+sent to connection event handler.
 
 Usage example:
 
@@ -1694,7 +1713,8 @@ int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 ```
 
 Parse buffer and fill `m` if buffer contain MQTT message.
-Return `MQTT_OK` if message succesfully parsed, `MQTT_INCOMPLETE` if message isn't fully receives and `MQTT_MALFORMED` is message has wrong format.
+Return `MQTT_OK` if message succesfully parsed, `MQTT_INCOMPLETE` if message 
+isn't fully receives and `MQTT_MALFORMED` is message has wrong format.
 
 Usage example:
 
@@ -1748,8 +1768,9 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts);
 
 Initialise TLS on a given connection.
 
-<span class="badge bg-danger">NOTE:</span> mbedTLS implementation uses `mg_random` as RNG. The `mg_random` can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM` and defining
-your own `mg_random()` implementation.
+<span class="badge bg-danger">NOTE:</span> mbedTLS implementation uses `mg_random` 
+as RNG. The `mg_random` can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM` 
+and defining your own `mg_random()` implementation.
 
 Usage example:
 
@@ -1787,7 +1808,8 @@ as the `mg_mgr_poll()` timeout argument in the main event loop.
 ### mg\_timer\_init()
 
 ```c
-void mg_timer_init(struct mg_timer *, unsigned long ms, unsigned flags, void (*fn)(void *), void *fn_data);
+void mg_timer_init(struct mg_timer *, unsigned long ms, unsigned flags, 
+                   void (*fn)(void *), void *fn_data);
 ```
 
 Setup a timer.
@@ -1833,7 +1855,8 @@ void mg_timer_poll(unsigned long uptime_ms);
 Traverse list of timers, and call them if current timestamp `uptime_ms` is
 past the timer's expiration time.
 
-Note, that `mg_mgr_poll` function internally calls `mg_timer_poll`, therefore, in most cases it is unnecessary to call it explicitly.
+Note, that `mg_mgr_poll` function internally calls `mg_timer_poll`, therefore, 
+in most cases it is unnecessary to call it explicitly.
 
 Usage example:
 
@@ -1907,9 +1930,11 @@ Note, that in general, `ptr` points to non-NULL terminated string, so, do not us
 struct mg_str mg_str(const char *s)
 ```
 
-Create Mongoose string from NULL-terminated C-string. This function doesn't duplicate provided string, and stores pointer within created `mg_str` structure.  
+Create Mongoose string from NULL-terminated C-string. This function doesn't 
+duplicate provided string, and stores pointer within created `mg_str` structure.  
 
-Note, that is you have problems in C++ (constructor shadowing), there is `mg_str_s` synonym for this function.
+Note, that is you have problems in C++ (constructor shadowing), there is `mg_str_s` 
+synonym for this function.
 
 Usage example:
 
@@ -1958,7 +1983,8 @@ int mg\_ncasecmp(const char *s1, const char *s2, size_t len);
 
 Case insensitive compare two C-strings, not more than `len` symbols or until meet `\0` symbol.
 
-Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
+Return value is 0 if strings are equal, more than zero if first argument is 
+greater then second and less than zero otherwise.
 
 Usage example:
 
@@ -1976,7 +2002,8 @@ int mg\_vcmp(const struct mg_str *s1, const char *s2);
 
 Сompare mongoose string and C-string.
 
-Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
+Return value is 0 if strings are equal, more than zero if first argument is 
+greater then second and less than zero otherwise.
 
 Usage example:
 
@@ -1995,7 +2022,8 @@ int mg\_vcasecmp(const struct mg_str *str1, const char *str2);
 
 Case insensitive compare mongoose string and C-string.
 
-Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
+Return value is 0 if strings are equal, more than zero if first argument is 
+greater then second and less than zero otherwise.
 
 Usage example:
 
@@ -2014,7 +2042,8 @@ int mg\_strcmp(const struct mg_str str1, const struct mg_str str2);
 
 Сompare two mongoose strings.
 
-Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
+Return value is 0 if strings are equal, more than zero if first argument is 
+greater then second and less than zero otherwise.
 
 Usage example:
 
@@ -2052,7 +2081,8 @@ free(str1.ptr);
 const char *mg\_strstr(const struct mg_str haystack, const struct mg_str needle)
 ```
 
-Search for `needle` substring in `haystack` string. Return pointer to `needle` occurrence within `haystack` or `NULL` if not found. 
+Search for `needle` substring in `haystack` string. Return pointer to `needle` 
+occurrence within `haystack` or `NULL` if not found. 
 
 Usage example:
 
@@ -2602,7 +2632,8 @@ const char *uri = mg_url_uri("https://example.org/subdir/subsubdir"); // `uri` i
 char *mg_file_read(const char *path, size_t *sizep);
 ```
 
-Read file contents into a nul-terminated malloc-ed string. It is a caller's responsibility to free() a returned pointer. If `sizep` is not NULL, it will
+Read file contents into a nul-terminated malloc-ed string. It is a caller's 
+responsibility to free() a returned pointer. If `sizep` is not NULL, it will
 return a file size in bytes. Return `NULL` on error.
 
 Usage example:
@@ -2641,7 +2672,8 @@ int mg_file_printf(const char *path, const char *fmt, ...);
 ```
 
 Write into a file `path` using `printf()` semantics.
-Return `true` on success, `false` otherwise. This function prints data to a temporary in-memory buffer first, then calls `mg_file_write()`.
+Return `true` on success, `false` otherwise. This function prints data to a 
+temporary in-memory buffer first, then calls `mg_file_write()`.
 
 ```c
 if(mg_file_printf("my_file.txt", "Hello, %s!", "world") {
@@ -2878,7 +2910,9 @@ mg_iobuf_free(&io);
 size_t mg_iobuf_add(struct mg_iobuf *io, size_t offset, const void *buf, size_t len, size_t align);
 ```
 
-Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets is expanded if required. The resulting `io->size` is always aligned to the `align` byte boundary - therefore, to avoid memory fragmentation and frequent reallocations, set `align` to a higher value.
+Insert data buffer `buf`, `len` at offset `offset`. The iobuf gets is expanded 
+if required. The resulting `io->size` is always aligned to the `align` byte boundary - therefore, 
+to avoid memory fragmentation and frequent reallocations, set `align` to a higher value.
 
 Usage example:
 
@@ -2898,7 +2932,8 @@ mg_iobuf_add(&io, 0, "hi", 2, 512);  // io->len is 2, io->size is 512
 size_t mg_iobuf_del(struct mg_iobuf *io, size_t offset, size_t len);
 ```
 
-Delete `len` bytes starting from `offset`, and shift the remaining bytes. If `len` is greater than `io->len`, nothing happens, so such call is silently ignored.
+Delete `len` bytes starting from `offset`, and shift the remaining bytes. 
+If `len` is greater than `io->len`, nothing happens, so such call is silently ignored.
 
 Usage example:
 
@@ -2918,7 +2953,8 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 ## Logging
 
-Mongoose provides a set of functions and macroses for logging. Application can use these functions for its own purposes as well as the rest of Mongoose API.
+Mongoose provides a set of functions and macroses for logging. Application can 
+use these functions for its own purposes as well as the rest of Mongoose API.
 
 ### LOG() 
 
@@ -2968,7 +3004,9 @@ mg_log_set("3"); // Set log level to debug
 void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd);
 ```
 
-By default, `LOG` writes to standard output stream (aka `stdout`), but this behaviour can be changes via `mg_log_set_callback`. This function allows to set callback, which called once mongoose (or host application) calls `LOG`
+By default, `LOG` writes to standard output stream (aka `stdout`), but this behaviour 
+can be changes via `mg_log_set_callback`. This function allows to set callback, 
+which called once mongoose (or host application) calls `LOG`
 
 Usage example:
 
@@ -2984,9 +3022,11 @@ mg_log_set_callback(&log_via_printf, NULL);
 
 ## Filesystem
 
-Mongoose allows to override file i/o operations in order to support different storages, like programmable flash, no-filesystem devices etc.
+Mongoose allows to override file i/o operations in order to support different storages, 
+like programmable flash, no-filesystem devices etc.
 
-In order to accomplish this, Mongoose uses wrappers, instead of using File API directly, and allows to provide application specific wrappers or to use one of standard.
+In order to accomplish this, Mongoose uses wrappers, instead of using File 
+API directly, and allows to provide application specific wrappers or to use one of standard.
 
 Wrapper is an istance of the following structure with members assigned to actual files functions.
 
@@ -3033,7 +3073,8 @@ mg_http_serve_dir(c, hm, &opts);
 
 ## Packed filesystem
 
-Packed filesystem allow to "pack" filesystem into single file, for example, into executable or flashable image. This is useful, for example, for implementation of HTTP-server on devices without filesystem.
+Packed filesystem allow to "pack" filesystem into single file, for example, into 
+executable or flashable image. This is useful, for example, for implementation of HTTP-server on devices without filesystem.
 
 In order to use packed filesystem do the following:
 
@@ -3047,7 +3088,8 @@ In order to use packed filesystem do the following:
    cc -o my_app my_app.c fs.c
 
 4. In your application code, you can access files using this function:<br>
-   `const char *mg_unpack(const char *file_name, size_t *size)` or app can also force `mg_http_serve_dir` function to use packed file system:
+   `const char *mg_unpack(const char *file_name, size_t *size)` or app can also 
+   force `mg_http_serve_dir` function to use packed file system:
 
 ```c
 struct mg_http_serve_opts opts;
