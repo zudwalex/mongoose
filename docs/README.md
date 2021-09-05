@@ -1894,8 +1894,8 @@ In most cases, Mongoose uses `mg_str` struct for string representation rather th
 
 ```
 struct mg_str {
-  const char *ptr;  // pointer to string data
-  size_t len;       // string length
+  const char *ptr;  // Pointer to string data 
+  size_t len;       // String len
 };
 ```
 
