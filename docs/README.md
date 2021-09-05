@@ -28,38 +28,40 @@ event-driven application:
 
 **Step 1.** Declare and initialize an event manager:
 
-  ```c
-  struct mg_mgr mgr;
-  mg_mgr_init(&mgr);
-  ```
+```c
+struct mg_mgr mgr;
+mg_mgr_init(&mgr);
+```
 
 **Step 2.** Create connections. For example, a server application should create listening
   connections. When any connection is created (listening or outgoing), an
   event handler function must be specified. An event handler function defines
   connection's behavior.
 
-  ```c
-  struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg);
-  ```
+```c
+static void fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+// ...
+}
+
+struct mg_connection *c = mg_http_listen(&mgr, "0.0.0.0:8000", fn, arg);
+```
 
 **Step 3.** Create an event loop by calling `mg_mgr_poll()`:
 
-  ```c
-   for (;;) {
-     mg_mgr_poll(&mgr, 1000);
-   }
-  ```
+```c
+  for (;;) {
+    mg_mgr_poll(&mgr, 1000);
+  }
+```
 
-`mg_mgr_poll()` iterates over all sockets, accepts new connections, sends and
+`mg_mgr_poll()` iterates over all connections, accepts new connections, sends and
 receives data, closes connections and calls event handler functions for the
 respective events. 
 
-Since the Mongoose's core is not protected against concurrent accesses,
-make sure that all `mg_*` API functions are called from the same thread
-or RTOS task.
+<span class="badge bg-danger">NOTE: </span>Since the Mongoose's core is not protected against concurrent accesses,
+make sure that all `mg_*` API functions are called from the same thread or RTOS task.
 
 ## Send and receive buffers
-
 
 Each connection has a send and receive buffer:
 - `struct mg_connection::send` - data to be sent to a peer
@@ -67,16 +69,14 @@ Each connection has a send and receive buffer:
 
 When data arrives, Mongoose appends received data to the `recv` and triggers an
 `MG_EV_READ` event. The user may send data back by calling one of the output
-functions, like `mg_send()` or `mg_printf()`. Output functions append data to
-the `send` buffer.  When Mongoose successfully writes data to the socket, it
-discards data from struct `mg_connection::send` and sends an `MG_EV_SEND`
+functions, like `mg_send()`, `mg_printf()` or protocol specific function like `mg_ws_send`. Output functions append data to the `send` buffer.  When Mongoose successfully writes data to the socket, it discards data from struct `mg_connection::send` and sends an `MG_EV_SEND`
 event.
 
 ## Event handler function
 
 Each connection has an event handler function associated with it. That function
 must be implemented by the user. Event handler is the key element of the
-Mongoose application, since it defines the connection's behaviour. This is
+Mongoose application, since it defines the connection's behavior. This is
 what an event handler function looks like:
 
 ```c
@@ -124,7 +124,7 @@ enum {
   MG_EV_WRITE,      // Data written to socket       int *num_bytes_written
   MG_EV_CLOSE,      // Connection closed            NULL
   MG_EV_HTTP_MSG,   // HTTP request/response        struct mg_http_message *
-  MG_EV_HTTP_CHUNK,  // HTTP chunk (partial msg)    struct mg_http_message *
+  MG_EV_HTTP_CHUNK, // HTTP chunk (partial msg)     struct mg_http_message *
   MG_EV_WS_OPEN,    // Websocket handshake done     struct mg_http_message *
   MG_EV_WS_MSG,     // Websocket msg, text or bin   struct mg_ws_message *
   MG_EV_WS_CTL,     // Websocket control msg        struct mg_ws_message *
@@ -145,7 +145,7 @@ that connection is UDP or not.  Some flags can be changed by application, for
 example, `is_draining` flag, if set by an application, tells Mongoose to send
 the remaining data to peer, and when everything is sent, close the connection.
 
-User-changeable flags are: `is_hexdumping`, `is_draining`, `is_closing`.
+<span class="badge bg-danger">NOTE: </span>User-changeable flags are: `is_hexdumping`, `is_draining`, `is_closing`.
 
 This is taken from `mongoose.h` as-is:
 
@@ -191,11 +191,7 @@ $ cc app2.c mongoose.c -D MG_ARCH=MG_ARCH_FREERTOS_LWIP       # Set architecture
 $ cc app3.c mongoose.c -D MG_ENABLE_SSI=0 -D MG_ENABLE_LOG=0  # Multiple options
 ```
 
-The list of supported
-architectures is defined in the
-[arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header
-file. Normally, there is no need to explicitly specify the architecture.  The
-architecture is guessed during the build, so setting it is not usually required.
+The list of supported architectures is defined in the [arch.h](https://github.com/cesanta/mongoose/blob/master/src/arch.h) header file. Normally, there is no need to explicitly specify the architecture.  The architecture is guessed during the build, so setting it is not usually required.
 
 | Name | Description |
 | ---- | ----------- |
@@ -207,12 +203,10 @@ architecture is guessed during the build, so setting it is not usually required.
 |MG_ARCH_FREERTOS_TCP | All systems with FreeRTOS kernel and FreeRTOS-Plus-TCP IP stack |
 |MG_ARCH_CUSTOM | A custom architecture, discussed in the next section |
 
-
 The other class of build constants is defined in
 [src/config.h](https://github.com/cesanta/mongoose/blob/master/src/config.h)
 together with their default values. They are tunables that include/exclude
 a certain functionality or change relevant parameters.
-
 
 Here is a list of build constants and their default values:
 
@@ -232,7 +226,6 @@ Here is a list of build constants and their default values:
 |MG_MAX_RECV_BUF_SIZE | (3 * 1024 * 1024) | Maximum recv buffer size |
 |MG_MAX_HTTP_HEADERS | 40 | Maximum number of HTTP headers |
 |MG_ENABLE_LINES | undefined | If defined, show source file names in logs |
-
 
 <span class="badge bg-danger">NOTE:</span> the `MG_IO_SIZE` constant also sets
 maximum UDP message size, see
@@ -255,7 +248,7 @@ and optionally other structures like `DIR *` depending on the functionality
 you have enabled - see previous section. Below is an example:
 
 ```c
-#include <stdbool.h>            // For bool
+#include <stdbool.h>
 #include <stdarg.h>
 
 #define MG_DIRSEP '/'
@@ -263,10 +256,7 @@ you have enabled - see previous section. Below is an example:
 #define MG_ENABLE_SOCKET 0      // Disable BSD socket API, implement your own
 ```
 
-3. This step is optional. If you have disabled BSD socket API, your build is
-going to fail due to several undefined symbols. Create `mongoose_custom.c`
-and implement the following functions (take a look at `src/sock.c` for the
-reference implementation):
+3. This step is optional. If you have disabled BSD socket API, your build is going to fail due to several undefined symbols. Create `mongoose_custom.c` and implement the following functions (take a look at `src/sock.c` for the reference implementation):
 
 ```c
 struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
@@ -534,6 +524,8 @@ Create an outbound connection, append this connection to `mgr->conns`.
 
 Return value: created connection, or `NULL` on error.
 
+Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
+
 Usage example:
 
 ```c
@@ -621,10 +613,10 @@ foo(c, "Hello, %s!", "world"); // Add "Hello, world!" to output buffer
 ### mg\_straddr
 
 ```c
-char *mg_straddr(struct mg_connection *c, char *buf, size_t len)
+char *mg_straddr(struct mg_connection *c, char *buf, size_t len);
 ```
 
-Write stringified IP address, associated with given connection to `buf`.
+Write stringified IP address, associated with given connection to `buf` (maximum size `len`)
 
 Usage example:
 
@@ -678,12 +670,11 @@ static void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_dat
 // ...
 
 struct mg_connection *c = mg_mkpipe(&mgr, handler, NULL);
-
 ```
 
 See [examples/multi-threaded](../examples/multi-threaded) for full usage example.
 
-### mg\_mgr_wakeup()
+### mg\_mgr\_wakeup()
 
 ```c
 void mg_mgr_wakeup(struct mg_connection *pipe);
@@ -698,7 +689,9 @@ Usage example:
 
 ```c
 struct mg_connection *c;
-...
+// Connection initialization
+// ...
+
 mg_mgr_wakeup(c);
 ```
 
@@ -713,6 +706,9 @@ struct mg_http_header {
 };
 ```
 
+Structure represents HTTP header, like `Content-Type: text/html`. 
+`Content-Type` is a header name and `text/html` is a header value.
+
 ### struct mg\_http\_message
 
 ```c
@@ -726,6 +722,8 @@ struct mg_http_message {
   struct mg_str message;                               // Request line + headers + body
 };
 ```
+
+Structure represents the HTTP message.
 
 <kbd>
 <img src=".\pics\mg_http_message.png">
@@ -773,6 +771,8 @@ Create HTTP client connection.
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
+Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
+
 Usage example: 
 
 ```c
@@ -813,6 +813,11 @@ size_t buf_len; // Input buffer size
 // ... 
 int req_len = mg_http_get_request_len(buf, buf_len); // req_len is now 12
 ```
+
+<kbd>
+<img src=".\pics\mg_http_get_request_len.png">
+</kbd>
+<br><br>
 
 ### mg\_http\_parse()
 
@@ -953,8 +958,7 @@ void mg_http_reply(struct mg_connection *c, int status_code,
 
 Send simple HTTP response using `printf()` semantic. This function formats
 response body according to a `body_fmt`, and automatically appends a correct
-`Content-Length` header. Extra headers could be passed via `headers`
-parameter.
+`Content-Length` header. Extra headers could be passed via `headers` parameter.
 
 - `status_code` - an HTTP response code
 - `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
@@ -1205,6 +1209,8 @@ struct mg_ws_message {
 };
 ```
 
+Structure represents the WebSocket message.
+
 ### mg\_ws\_connect()
 
 ```c
@@ -1222,6 +1228,7 @@ Create client Websocket connection.
   structure as `c->fn_data`
 - `fmt` - printf-like format string for additional HTTP headers, or NULL
 
+Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
 
 Usage example: 
 
@@ -1358,7 +1365,7 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc)
 ```
 
 Send time request to SNTP server. Note, that app can't send SNTP request more often than every 1 hour.
-`utc` is a current time, used to indicate if new request is possible.
+`utc` is a current time, used to verify if new request is possible.
 
 Usage example:
 
@@ -1386,6 +1393,8 @@ struct mg_mqtt_opts {
 };
 ```
 
+Structure used to specify MQTT connection options.
+
 ### struct mg\_mqtt\_message
 
 ```c
@@ -1395,6 +1404,7 @@ struct mg_mqtt_message {
 };
 ```
 
+Structure represents the MQTT message. 
 
 ### mg\_mqtt\_connect()
 
@@ -1411,6 +1421,8 @@ Create client MQTT connection.
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
+
+Note: this function does not connect to peer, it allocates required resources and starts connect process. Once peer is really connected `MG_EV_CONNECT` event is sent to connection event handler.
 
 Usage example:
 
@@ -1681,7 +1693,7 @@ mg_mqtt_disconnect(c);
 int mg_mqtt_parse(const uint8_t *buf, size_t len, struct mg_mqtt_message *m);
 ```
 
-Parse buffer and fill `m` struct if buffer contain MQTT message.
+Parse buffer and fill `m` if buffer contain MQTT message.
 Return `MQTT_OK` if message succesfully parsed, `MQTT_INCOMPLETE` if message isn't fully receives and `MQTT_MALFORMED` is message has wrong format.
 
 Usage example:
@@ -1690,6 +1702,7 @@ Usage example:
 uint8_t buf[1024]; // Received buffer
 size_t buf_len; // Received data len
 // ...
+
 struct mg_mqtt_message m;
 if(mg_mqtt_parse(buf, buf_len, &m) == MQTT_OK) {
   // Message received
@@ -1735,8 +1748,7 @@ void mg_tls_init(struct mg_connection *c, struct mg_tls_opts *opts);
 
 Initialise TLS on a given connection.
 
-<span class="badge bg-danger">NOTE:</span> mbedTLS implementation uses `mg_random` as RNG. The `mg_random`
-can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM` and defining
+<span class="badge bg-danger">NOTE:</span> mbedTLS implementation uses `mg_random` as RNG. The `mg_random` can be overridden by setting `MG_ENABLE_CUSTOM_RANDOM` and defining
 your own `mg_random()` implementation.
 
 Usage example:
@@ -1788,12 +1800,12 @@ A timer gets initialized and linked into the internal timers list:
 
 Usage example:
 ```c
-  void timer_func(void *data) {
-    (void) data;
-  }
+void timer_func(void *data) {
+  // ...
+}
 
-  struct mg_timer timer;
-  mg_timer_init(&timer, 1000 /* 1sec */, MG_TIMER_REPEAT, timer_func, NULL);
+struct mg_timer timer;
+mg_timer_init(&timer, 1000 /* 1sec */, MG_TIMER_REPEAT, timer_func, NULL);
 ```
 
 ### mg\_timer\_free()
@@ -1806,10 +1818,10 @@ Free timer, remove it from the internal timers list.
 
 Usage example:
 ```c
-  struct mg_timer timer;
-  // ...
+struct mg_timer timer;
+// ...
 
-  mg_timer_free(&timer);
+mg_timer_free(&timer);
 ```
 
 ### mg\_timer\_poll()
@@ -1866,7 +1878,7 @@ unsigned long uptime = mg_millis();
 void mg_usleep(unsigned long usecs);
 ```
 
-Block for a given number of microseconds.
+Block thread execution for a given number of microseconds.
 
 Usage example:
 
@@ -1895,9 +1907,9 @@ Note, that in general, `ptr` points to non-NULL terminated string, so, do not us
 struct mg_str mg_str(const char *s)
 ```
 
-Create Mongoose string from NULL-terminated C-string. This function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.  
+Create Mongoose string from NULL-terminated C-string. This function doesn't duplicate provided string, and stores pointer within created `mg_str` structure.  
 
-Note, that is you have problems in C++ (constructor shadowing) C++, there is `mg_str_s` synonym for this function.
+Note, that is you have problems in C++ (constructor shadowing), there is `mg_str_s` synonym for this function.
 
 Usage example:
 
@@ -1911,7 +1923,8 @@ struct mg_str str = mg_str("Hello, world!);
 struct mg_str mg\_str\_n(const char *s, size_t n);
 ```
 
-Create Mongoose string from C-string (can be non-NULL terminated). This function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.  
+Create Mongoose string from C-string `s` (can be non-NULL terminated, len is specified in `n`). <br>
+Note: this function doesn't duplicate provided string, but stores pointer within created `mg_str` structure.  
 
 Usage example:
 
@@ -1927,7 +1940,7 @@ int mg\_casecmp(const char *s1, const char *s2);
 ```
 
 Case insensitive compare two NULL-terminated strings.
-Return value is 0 if strings are equal, more than zero if first argument is greater then second and less than zero otherwise.
+Return value is 0 if strings are equal, more than zero if first argument is greater then second, and less than zero otherwise.
 
 Usage example:
 
@@ -2334,13 +2347,13 @@ mg_error(c, "Operation failed, error code: %d", errno);
 void mg_md5_init(mg_md5_ctx *c);
 ```
 
-Initialize context for MD5 hashing
+Initialize context for MD5 hashing.
 
 Usage example:
 
 ```c
 mg_md5_ctx ctx;
-mg_md5_init(&ctx)
+mg_md5_init(&ctx);
 ```
 
 ### mg\_md5\_update()
@@ -2357,8 +2370,8 @@ mg_md5_ctx ctx;
 // Context initialization
 // ...
 
-mg_md5_update(&ctx, "data", 4);
-mg_md5_update(&ctx, "more data", 9);
+mg_md5_update(&ctx, "data", 4);       // hash "data" string
+mg_md5_update(&ctx, "more data", 9);  // hash "more data" string
 ```
 
 ### mg\_md5\_final() 
@@ -2529,7 +2542,7 @@ if(mg_url_is_ssl("https://example.org") == 0) {
 ### mg\_url\_host()
 
 ```c
-struct mg_str mg_url_host(const char *url)
+struct mg_str mg_url_host(const char *url);
 ```
 
 Extract host name from given URL.
@@ -2905,7 +2918,7 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 
 ## Logging
 
-Mongoose provides a set of functions and macroses intented for logging. Application can use these functions for its own purposes as well as the rest of Mongoose API.
+Mongoose provides a set of functions and macroses for logging. Application can use these functions for its own purposes as well as the rest of Mongoose API.
 
 ### LOG() 
 
