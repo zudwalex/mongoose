@@ -730,6 +730,7 @@ struct mg_http_message {
 <kbd>
 <img src=".\pics\mg_http_message.png">
 </kbd>
+<br><br>
 
 ### mg\_http\_listen()
 
@@ -962,9 +963,9 @@ parameter.
 <kbd>
 <img src=".\pics\mg_http_reply.png">
 </kbd>
+<br><br>
 
 Usage examples:
-
 
 Send a simple JSON respose:
 ```c
@@ -1165,6 +1166,7 @@ struct mg_http_part {
 <kbd>
 <img src=".\pics\mg_http_part.png">
 </kbd>
+<br><br>
 
 ```c
 size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_part *part);
@@ -1178,6 +1180,7 @@ See [examples/form-upload](../examples/form-upload) for full usage example.
 <kbd>
 <img src=".\pics\mg_http_next_multipart.png">
 </kbd>
+<br><br>
 
 Usage example:
 
@@ -2106,6 +2109,7 @@ IMPORTANT: this function modifies `s` by pointing to the next entry.
 <kbd>
 <img src=".\pics\mg_commalist.png">
 </kbd>
+<br><br>
 
 Usage example:
 
@@ -2794,6 +2798,7 @@ by `buf`, and `len` specifies number of bytes currently stored.
 <kbd>
 <img src=".\pics\mg_iobuf.png">
 </kbd>
+<br><br>
 
 ### mg\_iobuf\_init()
 
@@ -2896,6 +2901,7 @@ mg_iobuf_del(&io, 0, "hi", 2, 512);  // io->len is 0, io->size is still 512
 <kbd>
 <img src=".\pics\mg_iobug_del.png">
 </kbd>
+<br><br>
 
 ## Logging
 
@@ -3014,7 +3020,7 @@ mg_http_serve_dir(c, hm, &opts);
 
 ## Packed filesystem
 
-Packed filesystem allow to "pack" filesystem into single file, for example, into flashed binary itself. This is useful, for example, for implementation of HTTP-server on devices without filesystem.
+Packed filesystem allow to "pack" filesystem into single file, for example, into executable or flashable image. This is useful, for example, for implementation of HTTP-server on devices without filesystem.
 
 In order to use packed filesystem do the following:
 
@@ -3022,18 +3028,26 @@ In order to use packed filesystem do the following:
    cc -o pack pack.c
 
 2. Convert list of files into single .c:<br>
-   ./pack file1.data file2.data > fs.c
-
-3. In your application code, you can access files using this function:<br>
-   `const char *mg_unpack(const char *file_name, size_t *size)`
+   Example: ./pack file1.data file2.data > fs.c
    
-4. Build your app with fs.c:
+3. Build your app with fs.c:
    cc -o my_app my_app.c fs.c
 
-Note, that app can also force `mg_http_serve_dir` func to use packed file system:
+4. In your application code, you can access files using this function:<br>
+   `const char *mg_unpack(const char *file_name, size_t *size)` or app can also force `mg_http_serve_dir` function to use packed file system:
 
 ```c
 struct mg_http_serve_opts opts;
 opts.fs = &mg_fs_packed; // Set packed ds as a file system
 mg_http_serve_dir(c, hm, &opts);
 ```
+
+<kbd>
+<img src=".\pics\packed.png">
+</kbd><br><br>
+<br><br>
+
+<kbd>
+<img src=".\pics\packed2.png">
+</kbd>
+<br><br>
