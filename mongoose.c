@@ -2950,6 +2950,8 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
 #elif MG_ARCH == MG_ARCH_FREERTOS_LWIP
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  fcntl(fd, F_SETFL, O_NONBLOCK);
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK, FD_CLOEXEC);
 #endif
@@ -3117,7 +3119,7 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
   (void) c;
 #else
   int on = 1;
@@ -4441,7 +4443,7 @@ double mg_time(void) {
                     ((int64_t) ftime.dwHighDateTime << 32)) /
                    10000000.0) -
          11644473600;
-#elif MG_ARCH == MG_ARCH_FREERTOS_TCP
+#elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
   return mg_millis() / 1000.0;
 #else
   struct timeval tv;
@@ -4457,6 +4459,8 @@ void mg_usleep(unsigned long usecs) {
   ets_delay_us(usecs);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   vTaskDelay(pdMS_TO_TICKS(usecs / 1000));
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  tx_thread_sleep((usecs / 1000) * TX_TIMER_TICKS_PER_SECOND);
 #else
   usleep((useconds_t) usecs);
 #endif
@@ -4471,6 +4475,8 @@ unsigned long mg_millis(void) {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_FREERTOS_LWIP
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
+#elif MG_ARCH == MG_ARCH_AZURERTOS
+  return (tx_time_get() / TX_TIMER_TICKS_PER_SECOND) * 1000;
 #else
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
