@@ -451,6 +451,12 @@ protocol-specific handler function that is set implicitly. For example, a
 protocol-specific handler is called before user-specific handler.  It parses
 incoming data and may invoke protocol-specific events like `MG_EV_HTTP_MSG`.
 
+Parameters:
+- `mgr` - event manager that should be pulled
+- `ms` - timeout (maximum time allowed to block current thread), in milliseconds
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -471,6 +477,11 @@ void mg_mgr_free(struct mg_mgr *mgr);
 
 Close all connections, and free all resources.
 
+Parameters:
+- `mgr` - event manager to free
+  
+Return value: none
+
 Usage example:
 
 ```c
@@ -490,6 +501,8 @@ struct mg_connection *mg_listen(struct mg_mgr *mgr, const char *url,
 ```
 
 Create a listening connection, append this connection to `mgr->conns`.
+
+Parameters:
 - `url` - specifies local IP address and port to listen on, e.g.
   `tcp://127.0.0.1:1234` or `udp://0.0.0.0:9000`
 - `fn` - an event handler function
@@ -522,6 +535,8 @@ struct mg_connection *mg_connect(struct mg_mgr *mgr, const char *url,
 ```
 
 Create an outbound connection, append this connection to `mgr->conns`.
+
+Parameters:
 - `url` - specifies remote IP address/port to connect to, e.g. `http://a.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
@@ -552,7 +567,7 @@ struct mg_connection *c = mg_connect(&mgr, "http://example.org", handler, NULL);
 ### mg\_send()
 
 ```c
-int mg_send(struct mg_connection *c, const void *data, size_t size);
+bool mg_send(struct mg_connection *c, const void *data, size_t size);
 ```
 
 Append `data` of size `size` to the `c->send` buffer. Return number of bytes
@@ -561,6 +576,14 @@ appended.
 Note: this function does not push data to the network! It only appends data to
 the output buffer.  The data is being sent when `mg_mgr_poll()` is called. If
 `mg_send()` is called multiple times, the output buffer grows.
+
+Parameters: 
+
+- `c` - connection, which output buffer should be modified
+- `data` - data to append
+- `size` - size of data to append
+  
+Return value: `true` if data appended successfully and `false` otherwise
 
 Usage example:
 
@@ -576,11 +599,17 @@ mg_send(c, data, sizeof(data) - 1); // Add "Hello, world!" to output buffer
 ### mg\_printf()
 
 ```c
-int mg_printf(struct mg_connection *, const char *fmt, ...);
+int mg_printf(struct mg_connection *c, const char *fmt, ...);
 ```
 
-Same as `mg_send()`, but formats data using `printf()` semantics. Return
-number of bytes appended to the output buffer.
+Same as `mg_send()`, but formats data using `printf()` semantics. 
+
+Parameters:
+
+- `c` - connection, which output buffer should be modified
+- `fmt` - format string
+  
+Return value: number of bytes appended to the output buffer.
 
 Usage example:
 
@@ -595,10 +624,18 @@ mg_printf(c, "Hello, %s!", "world"); // Add "Hello, world!" to output buffer
 ### mg\_vprintf()
 
 ```c
-int mg_vprintf(struct mg_connection *, const char *fmt, va_list ap);
+int mg_vprintf(struct mg_connection *c, const char *fmt, va_list ap);
 ```
 
 Same as `mg_printf()`, but takes `va_list` argument as a parameter.
+
+Parameters:
+
+- `c` - connection, which output buffer should be modified
+- `fmt` - format string
+- `ap` - arguments list
+
+Return value: number of bytes appended to the output buffer.
 
 Usage example:
 
@@ -626,6 +663,14 @@ char *mg_straddr(struct mg_connection *c, char *buf, size_t len);
 
 Write stringified IP address, associated with given connection to `buf` (maximum size `len`)
 
+Parameters:
+
+- `c` - connection, which output buffer should be modified
+- `buf` - buffer to write data
+- `len` - `buf` size
+  
+Return value: `buf` value
+
 Usage example:
 
 ```c
@@ -640,7 +685,7 @@ mg_straddr(c, buf, sizeof(buf)); // `buf` is now IP address string, like "127.0.
 ### mg\_mkpipe()
 
 ```c
-struct mg_connection *mg_mkpipe(struct mg_mgr *, mg_event_handler_t, void *);
+struct mg_connection *mg_mkpipe(struct mg_mgr *mgr, mg_event_handler_t fn, void *ud);
 ```
 
 Create a "pipe" connection which is safe to pass to a different task/thread,
@@ -662,6 +707,14 @@ common use cases:
 Another task can wake up a sleeping event manager (in `mg_mgr_poll()` call)
 using `mg_mgr_wakeup()`. When an event manager is woken up, a pipe
 connection event handler function receives `MG_EV_READ` event.
+
+Parameters: 
+
+- `mgr` - event manager to be used for connection creation
+- `fn` - pointer to event handler function
+- `ud` - user data, which will be passed to `fn`
+  
+Return value: pointer to created connection or `NULL` in case of error
 
 Usage example:
 
@@ -691,7 +744,11 @@ void mg_mgr_wakeup(struct mg_connection *pipe);
 Wake up an event manager that sleeps in `mg_mgr_poll()` call. This function
 must be called from a separate task/thread. Parameters:
 
+Parameters:
+
 - `pipe` - a special connection created by the `mg_mkpipe()` call
+
+Return value: none
 
 Usage example:
 
@@ -747,11 +804,14 @@ struct mg_connection *mg_http_listen(struct mg_mgr *, const char *url,
 
 Create HTTP listener.
 
+Parameters:
 - `url` - specifies local IP address and port to listen on, e.g. `http://0.0.0.0:8000`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
+
+Return value: pointer to created connection or `NULL` in case of error
 
 Usage example:
 
@@ -774,15 +834,19 @@ struct mg_connection *mg_http_connect(struct mg_mgr *, const char *url,
 ```
 
 Create HTTP client connection.
+
+Note: this function does not connect to peer, it allocates required resources and 
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is 
+sent to connection event handler.
+
+Parameters:
 - `url` - specifies remote URL, e.g. `http://google.com`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
-Note: this function does not connect to peer, it allocates required resources and 
-starts connect process. Once peer is really connected `MG_EV_CONNECT` event is 
-sent to connection event handler.
+Return value: pointer to created connection or `NULL` in case of error
 
 Usage example: 
 
@@ -811,10 +875,15 @@ if (c != NULL) {
 int mg_http_get_request_len(const unsigned char *buf, size_t buf_len);
 ```
 
-Return length of request in `buf` (with maximum len `buf_len`).
+Return length of request.
 
 The length of request is a number of bytes till the end of HTTP headers. It does 
 not include length of HTTP body. 
+
+Parameters:
+- `buf` - pointer to buffer with request
+- `buf_len` - maximum request length
+
 Return value: -1 on error, 0 if a message is incomplete, or the length of request. 
 
 Usage example:
@@ -837,8 +906,15 @@ int req_len = mg_http_get_request_len(buf, buf_len); // req_len is now 12
 int mg_http_parse(const char *s, size_t len, struct mg_http_message *hm);
 ```
 
-Parse string `s` (with maximum size `len`) into a structure `hm`. Return request
- length - see `mg_http_get_request_len()`.
+Parse string request into `mg_http_message` structure
+
+Parameters:
+
+- `s` - request string
+- `len` - maximum request len
+- `hm` - pointer to `struct mg_http_message` to receive result
+  
+Return value: request length (see `mg_http_get_request_len()`).
 
 Usage example:
 
@@ -855,10 +931,16 @@ if(mg_http_parse(req, req_len, &hm) > 0) {
 ### mg\_http\_printf\_chunk()
 
 ```
-void mg_http_printf_chunk(struct mg_connection *cnn, const char *fmt, ...);
+void mg_http_printf_chunk(struct mg_connection *c, const char *fmt, ...);
 ```
 
 Write a chunk of data in chunked encoding format, using `printf()` semantic.
+
+Parameters:
+- `c` - pointer to connection to write data
+- `fmt` - format string
+
+Return value: none
 
 Usage example:
 
@@ -878,6 +960,13 @@ void mg_http_write_chunk(struct mg_connection *c, const char *buf, size_t len);
 
 Write a chunk of data in chunked encoding format.
 
+Parameters:
+- `c` - pointer to connection to write data
+- `buf` - data to write
+- `len` - number of bytes to write
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -895,7 +984,13 @@ mg_http_write_chunk(c, data, sizeof(data) - 1); // Encoded "Hello, world!" is ad
 void mg_http_delete_chunk(struct mg_connection *c, struct mg_http_message *hm);
 ```
 
-Remove chunk specified by `hm` from input buffer.
+Remove chunk specified from input buffer.
+
+Parameters:
+- `c` - pointer to connection to modify
+- `hm` - chunk to delete
+
+Return value: none
 
 Usage example:
 
@@ -917,12 +1012,19 @@ struct mg_http_serve_opts {
   const char *ssi_pattern;    // SSI file name pattern, e.g. #.shtml
   const char *extra_headers;  // Extra HTTP headers to add in responses
 };
-void mg_http_serve_dir(struct mg_connection *, struct mg_http_message *hm,
+void mg_http_serve_dir(struct mg_connection *c, struct mg_http_message *hm,
                        const struct mg_http_serve_opts *opts);
 ```
 
 Serve static files according to the given options. Note that in order to
 enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
+
+Parameters:
+- `c` - connection, should be used to serve
+- `hm` - http message, that should be served
+- `opts` - serve options
+  
+Return value: none
 
 Usage example:
 
