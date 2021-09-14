@@ -96,6 +96,7 @@ extern "C" {
 #define MG_ARCH_ESP8266 4
 #define MG_ARCH_FREERTOS_TCP 5
 #define MG_ARCH_FREERTOS_LWIP 6
+#define MG_ARCH_AZURERTOS 7
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -133,6 +134,13 @@ extern "C" {
 
 
 
+
+
+#if MG_ARCH == MG_ARCH_AZURERTOS
+
+#include <stdarg.h>
+
+#endif
 
 
 #if MG_ARCH == MG_ARCH_ESP32
