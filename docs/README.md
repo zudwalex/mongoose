@@ -1020,7 +1020,7 @@ Serve static files according to the given options. Note that in order to
 enable SSI, set a `-DMG_ENABLE_SSI=1` build flag.
 
 Parameters:
-- `c` - connection, should be used to serve
+- `c` - connection should be used to serve
 - `hm` - http message, that should be served
 - `opts` - serve options
   
@@ -1044,11 +1044,19 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_serve\_file()
 
 ```c
-void mg_http_serve_file(struct mg_connection *, struct mg_http_message *hm,
+void mg_http_serve_file(struct mg_connection *c, struct mg_http_message *hm,
                         const char *path, struct mg_http_serve_opts *opts);
 ```
 
 Serve static file. Note that the `extra_headers` must end with `\r\n`.
+
+Parameters:
+- `c` - connection should be used to serve
+- `hm` - http message to serve
+- `path` - path to file to serve
+- `opts` - serve options
+  
+Return value: none
 
 Usage example:
 
@@ -1075,9 +1083,13 @@ Send simple HTTP response using `printf()` semantic. This function formats
 response body according to a `body_fmt`, and automatically appends a correct
 `Content-Length` header. Extra headers could be passed via `headers` parameter.
 
+Parameters:
+- `c` - connection to send HTTP response
 - `status_code` - an HTTP response code
 - `headers` - extra headers, default NULL. If not NULL, must end with `\r\n`
 - `fmt` - a format string for the HTTP body, in a printf semantics
+
+Return value: none
 
 <kbd>
 <img src=".\pics\mg_http_reply.png">
@@ -1112,10 +1124,16 @@ mg_http_reply(c, 403, "", "%s", "Not Authorized\n");
 ### mg\_http\_get\_header()
 
 ```c
-struct mg_str *mg_http_get_header(struct mg_http_message *, const char *name);
+struct mg_str *mg_http_get_header(struct mg_http_message *hm, const char *name);
 ```
 
-Return value of `name` HTTP header, or NULL if not found.
+Get HTTP header value
+
+Parameters:
+- `hm` - HTTP message to look for header
+- `name` - header name
+
+Return value: HTTP header value or `NULL` if not found
 
 Usage example:
 
@@ -1136,11 +1154,19 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_get\_var()
 
 ```c
-int mg_http_get_var(const struct mg_str *, const char *name, char *buf, int len);
+int mg_http_get_var(const struct mg_str *body, const char *name, char *buf, int len);
 ```
 
-Decode HTTP variable `name` into a given buffer. Return length of decoded
-variable. Zero or negative value means error.
+Decode HTTP variable
+
+Parameters:
+- `var` - HTTP request body
+- `name` - variable name
+- `buf` - buffer to write decoded variable
+- `len` - buffer size 
+
+Return value: length of decoded variable. Zero or negative value means error.
+
 
 Usage example:
 
@@ -1157,7 +1183,7 @@ if(mg_http_get_var(&body, "key1", buf, sizeof(buf)) {
 ### mg\_http\_creds()
 
 ```c
-void mg_http_creds(struct mg_http_message *, char *user, size_t userlen, 
+void mg_http_creds(struct mg_http_message *hm, char *user, size_t userlen, 
                    char *pass, size_t passlen);
 ```
 
@@ -1171,6 +1197,15 @@ up in the following order:
 - from the `?access_token=...` query string parameter, fills pass
 
 If none is found, then both user and pass are set to empty nul-terminated strings.
+
+Parameters:
+- `hm` - HTTP message to look for credentials
+- `user` - buffer to receive user name
+- `userlen` - size of `user` buffer
+- `pass` - buffer to receive password
+- `passlen` - size of `pass` buffer
+
+Return value: none
 
 Usage example:
 
@@ -1188,10 +1223,16 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_match\_uri()
 
 ```c
-bool mg_http_match_uri(const struct mg_http_message *, const char *glob);
+bool mg_http_match_uri(const struct mg_http_message *hm, const char *glob);
 ```
 
-Return true if HTTP request matches a given glob pattern; false otherwise.
+Check if HTTP request matches a given glob pattern.
+
+Parameters:
+- `hm` - HTTP message to match
+- `glob` - pattern
+
+Return value: true if HTTP request matches a given glob pattern; false otherwise.
 
 Usage example:
 
@@ -1211,7 +1252,7 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_upload()
 
 ```c
-int mg_http_upload(struct mg_connection *, struct mg_http_message *hm,
+int mg_http_upload(struct mg_connection *c, struct mg_http_message *hm,
                    const char *dir);
 ```
 
@@ -1244,6 +1285,13 @@ So, the expected usage of this API function is this:
 - When the last chunk is POSTed, upload finishes
 - POST data must not be encoded in any way, it it saved as-is
 
+Parameters:
+- `c` - connection should be used
+- `hm` - POST message, containing parameters described above 
+- `dir` - path to directory 
+
+Return value: request body len or negative value on error
+
 Usage example:
 
 ```c
@@ -1258,10 +1306,17 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_http\_bauth()
 
 ```c
-void mg_http_bauth(struct mg_connection *, const char *user, const char *pass);
+void mg_http_bauth(struct mg_connection *c, const char *user, const char *pass);
 ```
 
 Write a Basic `Authorization` header to the output buffer.
+
+Parameters:
+- `c` - connection to use
+- `user` - user name
+- `pass` - password
+
+Return value: none
 
 Usage example:
 
@@ -1294,7 +1349,14 @@ size_t mg_http_next_multipart(struct mg_str body, size_t offset, struct mg_http_
 
 Parse the multipart chunk in the `body` at a given `offset`. An initial
 `offset` should be 0. Fill up parameters in the provided `part`, which could be 
-NULL. Return offset to the next chunk, or 0 if there are no more chunks.
+NULL.
+
+Parameters:
+- `body`- message body
+- `offset` - start offset
+- `part` - pointer to `struct mg_http_part` to fill 
+
+Return value: offset to the next chunk, or 0 if there are no more chunks.
 
 See [examples/form-upload](../examples/form-upload) for full usage example.
 
@@ -1337,6 +1399,8 @@ struct mg_connection *mg_ws_connect(struct mg_mgr *, const char *url,
 ```
 
 Create client Websocket connection.
+
+Parameters:
 - `url` - specifies remote URL, e.g. `http://google.com`
 - `opts` - MQTT options, with client ID, qos, etc
 - `fn` - an event handler function
@@ -1344,6 +1408,8 @@ Create client Websocket connection.
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 - `fmt` - printf-like format string for additional HTTP headers, or NULL
+
+Return value: pointer to created connection or `NULL` on error
 
 Note: this function does not connect to peer, it allocates required resources and
  starts connect process. Once peer is really connected `MG_EV_CONNECT` event is
@@ -1371,13 +1437,20 @@ if(c != NULL) {
 ### mg\_ws\_upgrade()
 
 ```c
-void mg_ws_upgrade(struct mg_connection *, struct mg_http_message *,
+void mg_ws_upgrade(struct mg_connection *c, struct mg_http_message *hm,
                    const char *fmt, ...);
 ```
 
 Upgrade given HTTP connection to Websocket. The `fmt` is a printf-like
 format string for the extra HTTP headers returned to the client in a
 Websocket handshake. Set `fmt` to `NULL` if no extra headers needs to be passed.
+
+Parameters:
+- `c` - connection to use
+- `hm` - HTTP message
+- `fmt` - printf-like format string for additional HTTP headers, or NULL
+
+Return value: none
 
 Usage example:
 
@@ -1394,10 +1467,20 @@ void handler(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 ### mg\_ws\_send()
 
 ```c
-size_t mg_ws_send(struct mg_connection *, const char *buf, size_t len, int op);
+size_t mg_ws_send(struct mg_connection *c, const char *buf, size_t len, int op);
 ```
 
-Send `buf` (`len` size) to the websocket peer. `op` is the Websocket message type:
+Send data to websocket peer
+
+Parameters:
+- `c` - connection to use
+- `buf` - data to send
+- `len` - data size
+- `op` - Websocket message type
+
+Return value: sent bytes count
+
+Possible Websocket message type:
 
 ```c
 #define WEBSOCKET_OP_CONTINUE 0
@@ -1429,6 +1512,13 @@ size_t mg_ws_wrap(struct mg_connection *c, size_t len, int op)
 Convert data in output buffer to WebSocket format. Useful then implementing protocol over WebSocket
 See [examples/mqtt-over-ws-client](../examples/mqtt-over-ws-client) for full example.
 
+Parameters:
+- `c` - connection to use
+- `len` - bytes count to convert
+- `op` - Websocket message type (see `mg_ws_send`)
+
+Return value: new size of connection output buffer
+
 Usage example:
 
 ```c
@@ -1452,8 +1542,17 @@ struct mg_connection *mg_sntp_connect(struct mg_mgr *mgr, const char *url,
                                       mg_event_handler_t fn, void *fn_data)
 ```
 
-Connect SNTP server specified by `url` or `time.google.com` if NULL.
-Return pointer to created connection or `NULL` on error.
+Connect SNTP server.
+
+Parameters:
+- `mgr` - event manager to use
+- `url` - specifies remote URL, `time.google.com` if NULL.
+- `fn` - an event handler function
+- `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
+  event handler is called. This pointer is also stored in a connection
+  structure as `c->fn_data`
+
+Return value: pointer to created connection or `NULL` on error.
 
 Usage example:
 
@@ -1484,7 +1583,12 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc)
 ```
 
 Send time request to SNTP server. Note, that app can't send SNTP request more often than every 1 hour.
-`utc` is a current time, used to verify if new request is possible.
+
+Parameters:
+- `c` - connection to use
+- `utc` - current time, used to verify if new request is possible.
+
+Return value: none
 
 Usage example:
 
@@ -1534,6 +1638,12 @@ struct mg_connection *mg_mqtt_connect(struct mg_mgr *, const char *url,
 ```
 
 Create client MQTT connection.
+
+Note: this function does not connect to peer, it allocates required resources and 
+starts connect process. Once peer is really connected `MG_EV_CONNECT` event is 
+sent to connection event handler.
+
+Parameters:
 - `url` - specifies remote URL, e.g. `http://google.com`
 - `opts` - MQTT options, with client ID, qos, etc
 - `fn` - an event handler function
@@ -1541,9 +1651,7 @@ Create client MQTT connection.
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
 
-Note: this function does not connect to peer, it allocates required resources and 
-starts connect process. Once peer is really connected `MG_EV_CONNECT` event is 
-sent to connection event handler.
+Return value: pointer to created connection or `NULL` on error
 
 Usage example:
 
@@ -1574,11 +1682,14 @@ struct mg_connection *mg_mqtt_listen(struct mg_mgr *mgr, const char *url,
 
 Create MQTT listener.
 
+Parameters:
 - `url` - specifies local IP address and port to listen on, e.g. `mqtt://0.0.0.0:1883`
 - `fn` - an event handler function
 - `fn_data` - an arbitrary pointer, which will be passed as `fn_data` when an
   event handler is called. This pointer is also stored in a connection
   structure as `c->fn_data`
+
+Return value: pointer to created connection or `NULL` on error
 
 Usage example:
 
@@ -1602,6 +1713,13 @@ void mg_mqtt_login(struct mg_connection *c, const char *url,
 
 Send MQTT login request.
 
+Parameters:
+- `c` - connection to use
+- `url` - url, containing user name and password to use
+- `opts` - request options
+
+Return value: none
+
 Usage example:
 
 ```c
@@ -1620,11 +1738,20 @@ void handler(struct mg_connection *c, int ev, void *evd, void *fnd) {
 ### mg\_mqtt\_pub()
 
 ```c
-void mg_mqtt_pub(struct mg_connection *, struct mg_str *topic,
+void mg_mqtt_pub(struct mg_connection *c, struct mg_str *topic,
                  struct mg_str *data, int qos, bool retain);
 ```
 
-Publish message `data` to the topic `topic` with given QoS and retain flag.
+Publish message.
+
+Parameters:
+- `c` - connection to use
+- `topic` - topic to publish data
+- `data` - data to publish
+- `qos` - required QoS
+- `retain` - retain flag
+
+Return value: none
 
 Usage example:
 
@@ -1642,10 +1769,17 @@ mg_mqtt_pub(c, &topic, &data, 1, false);
 ### mg\_mqtt\_sub()
 
 ```c
-void mg_mqtt_sub(struct mg_connection *, struct mg_str *topic, int qos);
+void mg_mqtt_sub(struct mg_connection *c, struct mg_str *topic, int qos);
 ```
 
-Subscribe to topic `topic` with given QoS.
+Subscribe to topic.
+
+Parameters:
+- `c` - connection to use
+- `topic` - topic to subscribe
+- `qos` - required Qos
+
+Return value: none
 
 ```c
 struct mg_connection *c;
@@ -1664,7 +1798,15 @@ size_t mg_mqtt_next_sub(struct mg_mqtt_message *msg, struct mg_str *topic, uint8
 
 Traverse list of subscribed topics. 
 Used to implement MQTT server when `MQTT_CMD_SUBSCRIBE` is received.
-Return next position, or 0 when done. Initial position `pos` should be 4. Example:
+Initial position `pos` should be 4. 
+
+Parameters:
+- `mgs` - MQTT message
+- `topic` - pointer to `mg_str` to receive topic
+- `qos` - pointer to `uint8_t` to receive qos
+- `pos` - position to list from 
+
+Return value: Return next position, or 0 when done.
 
 Usage example:
 
