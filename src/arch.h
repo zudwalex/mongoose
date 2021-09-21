@@ -20,6 +20,8 @@
 #define MG_ARCH MG_ARCH_ESP32
 #elif defined(FREERTOS_IP_H)
 #define MG_ARCH MG_ARCH_FREERTOS_TCP
+#elif defined(AZURE_RTOS_THREADX)
+#define MG_ARCH MG_ARCH_AZURERTOS
 #endif
 
 #if !defined(MG_ARCH)
