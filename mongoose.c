@@ -2996,7 +2996,7 @@ SOCKET mg_open_listener(const char *url, struct mg_addr *addr) {
 #endif
         bind(fd, &usa.sa, slen) == 0 &&
         // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
-        (type == SOCK_DGRAM || listen(fd, 128) == 0)) {
+        (type == SOCK_DGRAM || listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0)) {
       // In case port was set to 0, get the real port number
       if (getsockname(fd, &usa.sa, &slen) == 0) {
         addr->port = usa.sin.sin_port;
@@ -3193,6 +3193,9 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   socklen_t sa_len = sizeof(usa);
   SOCKET fd = accept(FD(lsn), &usa.sa, &sa_len);
   if (fd == INVALID_SOCKET) {
+#if MG_ARCH == MG_ARCH_AZURERTOS
+	if (MG_SOCK_ERRNO != EAGAIN)
+#endif
     LOG(LL_ERROR, ("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
 #if (!defined(_WIN32) && (MG_ARCH != MG_ARCH_FREERTOS_TCP))
   } else if ((long) fd >= FD_SETSIZE) {

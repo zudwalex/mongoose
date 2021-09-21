@@ -88,6 +88,10 @@ extern "C" {
 #define MG_PATH_MAX PATH_MAX
 #endif
 
+#ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#endif
+
 
 #define MG_ARCH_CUSTOM 0
 #define MG_ARCH_UNIX 1
