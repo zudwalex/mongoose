@@ -33,6 +33,7 @@ extern "C" {
 #define MG_ARCH_FREERTOS_TCP 5
 #define MG_ARCH_FREERTOS_LWIP 6
 #define MG_ARCH_AZURERTOS 7
+#define MG_ARCH_ZEPHYR 8
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -439,6 +440,22 @@ static __inline struct tm *localtime_r(time_t *t, struct tm *tm) {
   *tm = *x;
   return tm;
 }
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_ZEPHYR
+
+#include <stdio.h>
+#include <time.h>
+#include <ctype.h>
+#include <net/socket.h>
+#include <posix/time.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+
+#define MBEDTLS_FS_IO
 
 #endif
 

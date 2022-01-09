@@ -2990,7 +2990,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
   setsockopt(fd, 0, FREERTOS_SO_SNDTIMEO, &off, sizeof(off));
 #elif MG_ARCH == MG_ARCH_FREERTOS_LWIP
   lwip_fcntl(fd, F_SETFL, O_NONBLOCK);
-#elif MG_ARCH == MG_ARCH_AZURERTOS
+#elif MG_ARCH == MG_ARCH_AZURERTOS || MG_ARCH == MG_ARCH_ZEPHYR
   fcntl(fd, F_SETFL, O_NONBLOCK);
 #else
   fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);  // Set non-blocking mode
@@ -3165,7 +3165,7 @@ static void close_conn(struct mg_connection *c) {
 }
 
 static void setsockopts(struct mg_connection *c) {
-#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS
+#if MG_ARCH == MG_ARCH_FREERTOS_TCP || MG_ARCH == MG_ARCH_AZURERTOS || MG_ARCH == MG_ARCH_ZEPHYR
   (void) c;
 #else
   int on = 1;
