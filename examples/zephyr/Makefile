@@ -5,8 +5,7 @@ example:
 	true
 
 build:
-	cp ../../mongoose.c ../../mongoose.h http-server/src/
-	cd $(ZEPHYR_DIR) && west build -b nucleo_h743zi -p auto $(CWD)/http-server
+	cd $(ZEPHYR_DIR) && west build -b nucleo_h743zi -p auto $(CWD)/http-client
 
 flash:
 	cd $(ZEPHYR_DIR) && west flash
