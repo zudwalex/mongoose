@@ -7,7 +7,7 @@
 static const char *s_debug_level = "3";
 static time_t s_boot_timestamp = 0;
 static struct mg_connection *s_sntp_conn = NULL;
-static const char *s_url = "https://example.org";
+static const char *s_url = "https://example.org/";
 static const char *s_post_data = NULL;     // POST data
 static const int64_t s_timeout_ms = 1500;  // Connect timeout in milliseconds
 struct mg_mgr mgr;
