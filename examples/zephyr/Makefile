@@ -1,7 +1,7 @@
 CWD = $(realpath $(CURDIR))
 ZEPHYR_DIR ?= $(realpath ../../../zephyrproject)
 BOARD ?= nucleo_f746zg
-EXAMPLE ?= websocket-server
+EXAMPLE ?= http-client
 
 example:
 	true
