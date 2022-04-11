@@ -1,7 +1,7 @@
 CWD = $(realpath $(CURDIR))
 ZEPHYR_DIR ?= $(realpath ../../../zephyrproject)
-BOARD ?= nucleo_f746zg
-EXAMPLE ?= http-client
+BOARD ?= nucleo_h743zi
+EXAMPLE ?= mqtt-client-aws-client
 
 example:
 	true
