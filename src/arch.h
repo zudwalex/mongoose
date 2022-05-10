@@ -10,6 +10,7 @@
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
+#define MG_ARCH_TIRTOS 10
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)

@@ -37,6 +37,7 @@ extern "C" {
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
+#define MG_ARCH_TIRTOS 10
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -328,6 +329,24 @@ struct timeval {
 #define MG_PATH_MAX 128
 #endif
 
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_TIRTOS
+
+#include <stdlib.h>
+#include <ctype.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <time.h>
+#include <errno.h>
+
+#include <sys/socket.h>
 
 #endif
 
