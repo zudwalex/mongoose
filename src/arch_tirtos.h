@@ -15,4 +15,7 @@
 
 #include <sys/socket.h>
 
+extern int SockStatus(SOCKET hSock, int request, int *results );
+extern int SockSet(SOCKET hSock, int Type, int Prop, void *pbuf, int size);
+
 #endif
