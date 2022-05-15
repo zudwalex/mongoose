@@ -148,9 +148,8 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
     struct mg_dns_message dm;
     int resolved = 0;
     if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
-      char *s = mg_hexdump(c->recv.buf, c->recv.len);
-      MG_ERROR(("Unexpected DNS response:\n%s\n", s));
-      free(s);
+      MG_ERROR(("Unexpected DNS response:"));
+      mg_hexdump(c->recv.buf, c->recv.len);
     } else {
       MG_VERBOSE(("%s %d", dm.name, dm.resolved));
       for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
@@ -163,7 +162,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
             char buf[100];
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(("%lu %s resolved to %s", d->c->id, dm.name,
+            MG_DEBUG(("%lu %s is %s", d->c->id, dm.name,
                       mg_ntoa(&d->c->rem, buf, sizeof(buf))));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6

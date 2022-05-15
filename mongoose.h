@@ -37,7 +37,9 @@ extern "C" {
 #define MG_ARCH_AZURERTOS 7
 #define MG_ARCH_RTX_LWIP 8
 #define MG_ARCH_ZEPHYR 9
-#define MG_ARCH_TIRTOS 10
+#define MG_ARCH_NEWLIB 10
+#define MG_ARCH_RTX 11
+#define MG_ARCH_TIRTOS 12
 
 #if !defined(MG_ARCH)
 #if defined(__unix__) || defined(__APPLE__)
@@ -57,7 +59,7 @@ extern "C" {
 #endif
 
 #if !defined(MG_ARCH)
-#error "MG_ARCH is not specified and we couldn't guess it."
+#error "MG_ARCH is not specified and we couldn't guess it. Set -D MG_ARCH=..."
 #endif
 #endif  // !defined(MG_ARCH)
 
@@ -70,6 +72,9 @@ extern "C" {
 #if MG_ARCH == MG_ARCH_CUSTOM
 #include <mongoose_custom.h>
 #endif
+
+
+
 
 
 
@@ -291,6 +296,61 @@ struct timeval {
 #endif
 
 #endif  // MG_ARCH == MG_ARCH_FREERTOS_TCP
+
+
+#if MG_ARCH == MG_ARCH_NEWLIB
+#define _POSIX_TIMERS
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
+#define MG_PATH_MAX 100
+#define MG_ENABLE_SOCKET 0
+#define MG_ENABLE_DIRLIST 0
+
+#endif
+
+
+#if MG_ARCH == MG_ARCH_RTX
+
+#include <ctype.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#include <rl_net.h>
+
+#define MG_IO_SIZE 512
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 1
+#define MG_ENABLE_CUSTOM_MILLIS 1
+typedef int socklen_t;
+#define closesocket(x) closesocket(x)
+#define mkdir(a, b) (-1)
+#define EWOULDBLOCK BSD_EWOULDBLOCK
+#define EAGAIN BSD_EWOULDBLOCK
+#define EINPROGRESS BSD_EWOULDBLOCK
+#define EINTR BSD_EWOULDBLOCK
+#define ECONNRESET BSD_ECONNRESET
+#define EPIPE BSD_ECONNRESET
+#define TCP_NODELAY SO_KEEPALIVE
+
+#endif
 
 
 #if MG_ARCH == MG_ARCH_RTX_LWIP
@@ -534,15 +594,11 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 #ifndef MG_ENABLE_SSI
-#define MG_ENABLE_SSI 1
+#define MG_ENABLE_SSI 0
 #endif
 
 #ifndef MG_ENABLE_IPV6
 #define MG_ENABLE_IPV6 0
-#endif
-
-#ifndef MG_ENABLE_LOG
-#define MG_ENABLE_LOG 1
 #endif
 
 #ifndef MG_ENABLE_MD5
@@ -597,7 +653,7 @@ int sscanf(const char *, const char *, ...);
 #endif
 
 #ifndef MG_SOCK_LISTEN_BACKLOG_SIZE
-#define MG_SOCK_LISTEN_BACKLOG_SIZE 128
+#define MG_SOCK_LISTEN_BACKLOG_SIZE 3
 #endif
 
 #ifndef MG_DIRSEP
@@ -646,7 +702,6 @@ bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 bool mg_commalist(struct mg_str *s, struct mg_str *k, struct mg_str *v);
 size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap);
 size_t mg_snprintf(char *, size_t, const char *fmt, ...) PRINTF_LIKE(3, 4);
-char *mg_hexdump(const void *buf, size_t len);
 char *mg_hex(const void *buf, size_t len, char *dst);
 void mg_unhex(const char *buf, size_t len, unsigned char *to);
 unsigned long mg_unhexn(const char *s, size_t len);
@@ -666,26 +721,12 @@ void mg_log(const char *fmt, ...) PRINTF_LIKE(1, 2);
 bool mg_log_prefix(int ll, const char *file, int line, const char *fname);
 void mg_log_set(const char *spec);
 void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *param);
-
-// Let the compiler always see the log invocation in order to check parameters
-// For MG_ENABLE_LOG=0 case, the call will be optimised out, anyway
-
-#if MG_ENABLE_LOG
+void mg_hexdump(const void *buf, size_t len);
 
 #define MG_LOG(level, args)                                                \
   do {                                                                     \
     if (mg_log_prefix((level), __FILE__, __LINE__, __func__)) mg_log args; \
   } while (0)
-
-#else
-
-#define MG_LOG(level, args) \
-  do {                      \
-    (void) level;           \
-    if (0) mg_log args;     \
-  } while (0)
-
-#endif
 
 #define MG_ERROR(args) MG_LOG(MG_LL_ERROR, args)
 #define MG_INFO(args) MG_LOG(MG_LL_INFO, args)
@@ -700,14 +741,13 @@ struct mg_timer {
   uint64_t prev_ms;         // Timestamp of a previous poll
   uint64_t expire;          // Expiration timestamp in milliseconds
   unsigned flags;           // Possible flags values below
-#define MG_TIMER_REPEAT 1   // Call function periodically, otherwise run once
+#define MG_TIMER_ONCE 0     // Call function once
+#define MG_TIMER_REPEAT 1   // Call function periodically
 #define MG_TIMER_RUN_NOW 2  // Call immediately when timer is set
   void (*fn)(void *);       // Function to call
   void *arg;                // Function argument
-  struct mg_timer *next;    // Linkage in g_timers list
+  struct mg_timer *next;    // Linkage
 };
-
-extern struct mg_timer *g_timers;  // Global list of timers
 
 void mg_timer_init(struct mg_timer **head, struct mg_timer *timer,
                    uint64_t milliseconds, unsigned flags, void (*fn)(void *),
@@ -770,26 +810,6 @@ uint64_t mg_millis(void);
 
 #define mg_htons(x) mg_ntohs(x)
 #define mg_htonl(x) mg_ntohl(x)
-
-#ifndef EXTERN_C
-#ifdef __cplusplus
-#define EXTERN_C extern "C"
-#else
-#define EXTERN_C
-#endif
-#endif
-
-// Expands to a string representation of its argument: e.g.
-// MG_STRINGIFY_LITERAL(5) expands to "5"
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-#define MG_STRINGIFY_LITERAL(...) #__VA_ARGS__
-#else
-#define MG_STRINGIFY_LITERAL(x) #x
-#endif
-// Expands to a string representation of its argument, which can be a macro:
-// #define FOO 123
-// MG_STRINGIFY_MACRO(FOO)  // Expands to 123
-#define MG_STRINGIFY_MACRO(x) MG_STRINGIFY_LITERAL(x)
 
 // Linked list management macros
 #define LIST_ADD_HEAD(type_, head_, elem_) \
@@ -926,6 +946,8 @@ struct mg_mgr {
   uint16_t mqtt_id;             // MQTT IDs for pub/sub
   void *active_dns_requests;    // DNS requests in progress
   struct mg_timer *timers;      // Active timers
+  void *priv;                   // Used by the experimental stack
+  size_t extraconnsize;         // Used by the experimental stack
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
   SocketSet_t ss;  // NOTE(lsm): referenced from socket struct
 #endif

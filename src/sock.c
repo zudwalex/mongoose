@@ -102,6 +102,14 @@ bool mg_sock_conn_reset(void) {
 #endif
 }
 
+static void setlocaddr(SOCKET fd, struct mg_addr *addr) {
+  union usa usa;
+  socklen_t n = sizeof(usa);
+  if (getsockname(fd, &usa.sa, &n) == 0) {
+    tomgaddr(&usa, addr, n != sizeof(usa.sin));
+  }
+}
+
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing
@@ -112,17 +120,16 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       union usa usa;
       char t1[50] = "", t2[50] = "";
       socklen_t slen = sizeof(usa.sin);
-      char *s = mg_hexdump(buf, (size_t) n);
       struct mg_addr a;
       memset(&usa, 0, sizeof(usa));
       memset(&a, 0, sizeof(a));
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
       tomgaddr(&usa, &a, c->rem.is_ip6);
-      MG_INFO(("\n-- %lu %s %s %s %s %ld\n%s", c->id,
+      MG_INFO(("\n-- %lu %s %s %s %s %ld", c->id,
                mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
-               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n, s));
-      free(s);
-      (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
+               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n));
+
+      mg_hexdump(buf, (size_t) n);
     }
     if (r) {
       struct mg_str evd = mg_str_n(buf, (size_t) n);
@@ -142,6 +149,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
     union usa usa;
     socklen_t slen = tousa(&c->rem, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
+    if (n > 0) setlocaddr(FD(c), &c->loc);
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
@@ -161,7 +169,12 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
-#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+#if defined(MG_CUSTOM_NONBLOCK)
+  MG_CUSTOM_NONBLOCK(fd);
+#elif MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  unsigned long on = 1;
+  ioctlsocket(fd, FIONBIO, &on);
+#elif MG_ARCH == MG_ARCH_RTX
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -190,7 +203,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   SOCKET fd = INVALID_SOCKET;
-  int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
+  bool success = false;
   c->loc.port = mg_htons(mg_url_port(url));
   if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
@@ -202,52 +215,47 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
     (void) on;
 
-    if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
-#if (MG_ARCH != MG_ARCH_WIN32 || !defined(SO_EXCLUSIVEADDRUSE)) && \
-    (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
-        // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
-        //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
-        //    SO_REUSEADDR allows to bind a socket to a port without error even
-        //    if the port is already open by another program. This is not the
-        //    behavior SO_REUSEADDR was designed for, and leads to hard-to-track
-        //    failure scenarios. Therefore, SO_REUSEADDR was disabled on Windows
-        //    unless SO_EXCLUSIVEADDRUSE is supported and set on a socket.
-        // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by
-        // defining
-        //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
-        //    but won't work! (setsockopt will return EINVAL)
-        !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) &&
+    if ((fd = socket(af, type, proto)) == INVALID_SOCKET) {
+      MG_ERROR(("socket: %d", MG_SOCK_ERRNO));
+#if ((MG_ARCH == MG_ARCH_WIN32) || (MG_ARCH == MG_ARCH_UNIX) || \
+     (defined(LWIP_SOCKET) && SO_REUSE == 1))
+    } else if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
+                          sizeof(on)) != 0) {
+      // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
+      //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
+      //    SO_REUSEADDR allows to bind a socket to a port without error even
+      //    if the port is already open by another program. This is not the
+      //    behavior SO_REUSEADDR was designed for, and leads to hard-to-track
+      //    failure scenarios. Therefore, SO_REUSEADDR was disabled on Windows
+      //    unless SO_EXCLUSIVEADDRUSE is supported and set on a socket.
+      // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by
+      // defining
+      //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
+      //    but won't work! (setsockopt will return EINVAL)
+      MG_ERROR(("reuseaddr: %d", MG_SOCK_ERRNO));
 #endif
 #if MG_ARCH == MG_ARCH_WIN32 && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
-        // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-        //! setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on))
-        //! &&
-        !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
-                    sizeof(on)) &&
+    } else if (setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
+                          sizeof(on)) != 0) {
+      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+      MG_ERROR(("exclusiveaddruse: %s", MG_SOCK_ERRNO));
 #endif
-        bind(fd, &usa.sa, slen) == 0 &&
-        // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
-        (type == SOCK_DGRAM || listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0)) {
+    } else if (bind(fd, &usa.sa, slen) != 0) {
+      MG_ERROR(("bind: %d", MG_SOCK_ERRNO));
+    } else if ((type == SOCK_STREAM &&
+                listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) != 0)) {
+      // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
       // In case port was set to 0, get the real port number
-      if (getsockname(fd, &usa.sa, &slen) == 0) {
-        c->loc.port = usa.sin.sin_port;
-#if MG_ENABLE_IPV6
-        if (c->loc.is_ip6) c->loc.port = usa.sin6.sin6_port;
-#endif
-      }
+      MG_ERROR(("listen: %d", MG_SOCK_ERRNO));
+    } else {
+      setlocaddr(fd, &c->loc);
       mg_set_non_blocking_mode(fd);
-    } else if (fd != INVALID_SOCKET) {
-      s_err = MG_SOCK_ERRNO;
-      closesocket(fd);
-      fd = INVALID_SOCKET;
+      c->fd = S2PTR(fd);
+      success = true;
     }
   }
-  c->fd = S2PTR(fd);
-  if (fd == INVALID_SOCKET) {
-    if (s_err == 0) s_err = MG_SOCK_ERRNO;
-    MG_ERROR(("failed %s, errno %d (%s)", url, s_err, strerror(s_err)));
-  }
-  return fd != INVALID_SOCKET;
+  if (success == false && fd != INVALID_SOCKET) closesocket(fd);
+  return success;
 }
 
 static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -313,29 +321,9 @@ static void setsockopts(struct mg_connection *c) {
 #endif
   if (setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (char *) &on, sizeof(on)) != 0)
     (void) 0;
-#if defined(TCP_QUICKACK)
-  if (setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on)) != 0)
-    (void) 0;
-#endif
   if (setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) !=
       0)
     (void) 0;
-#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
-    defined(__linux__)
-  int idle = 60;
-  if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) != 0)
-    (void) 0;
-#endif
-#if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__) && MG_ARCH != MG_ARCH_ZEPHYR
-  {
-    int cnt = 3, intvl = 20;
-    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt)) != 0)
-      (void) 0;
-    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl)) !=
-        0)
-      (void) 0;
-  }
-#endif
 #endif
 }
 
@@ -372,6 +360,7 @@ void mg_connect_resolved(struct mg_connection *c) {
 static SOCKET raccept(SOCKET sock, union usa *usa, socklen_t len) {
   SOCKET s = INVALID_SOCKET;
   do {
+    memset(usa, 0, sizeof(*usa));
     s = accept(sock, &usa->sa, &len);
   } while (s == INVALID_SOCKET && errno == EINTR);
   return s;
@@ -385,8 +374,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   if (fd == INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
     // AzureRTOS, in non-block socket mode can mark listening socket readable
-    // even it is not. See comment for 'select' func implementation in nx_bsd.c
-    // That's not an error, just should try later
+    // even it is not. See comment for 'select' func implementation in
+    // nx_bsd.c That's not an error, just should try later
     if (MG_SOCK_ERRNO != EAGAIN)
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
@@ -409,8 +398,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     setsockopts(c);
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
-    c->pfn = lsn->pfn;
     c->loc = lsn->loc;
+    c->pfn = lsn->pfn;
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
@@ -431,7 +420,8 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   usa[1] = usa[0];
 
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
-      bind(sock, &usa[0].sa, len) == 0 && listen(sock, 3) == 0 &&
+      bind(sock, &usa[0].sa, len) == 0 &&
+      listen(sock, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0 &&
       getsockname(sock, &usa[0].sa, &len) == 0 &&
       (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
       connect(sp[0], &usa[0].sa, len) == 0 &&
@@ -520,7 +510,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 
 static void connect_conn(struct mg_connection *c) {
   int rc = 0;
-#if MG_ARCH != MG_ARCH_FREERTOS_TCP
+#if (MG_ARCH != MG_ARCH_FREERTOS_TCP) && (MG_ARCH != MG_ARCH_RTX)
   socklen_t len = sizeof(rc);
   if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
 #endif

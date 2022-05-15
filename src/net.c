@@ -139,7 +139,8 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
 }
 
 struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
-  struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
+  struct mg_connection *c =
+      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
   if (c != NULL) {
     c->mgr = mgr;
     c->id = ++mgr->nextid;
@@ -229,6 +230,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
   struct mg_timer *tmp, *t = mgr->timers;
   while (t != NULL) tmp = t->next, free(t), t = tmp;
+  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP

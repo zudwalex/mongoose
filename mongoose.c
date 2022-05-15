@@ -260,9 +260,8 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
     struct mg_dns_message dm;
     int resolved = 0;
     if (mg_dns_parse(c->recv.buf, c->recv.len, &dm) == false) {
-      char *s = mg_hexdump(c->recv.buf, c->recv.len);
-      MG_ERROR(("Unexpected DNS response:\n%s\n", s));
-      free(s);
+      MG_ERROR(("Unexpected DNS response:"));
+      mg_hexdump(c->recv.buf, c->recv.len);
     } else {
       MG_VERBOSE(("%s %d", dm.name, dm.resolved));
       for (d = (struct dns_data *) c->mgr->active_dns_requests; d != NULL;
@@ -275,7 +274,7 @@ static void dns_cb(struct mg_connection *c, int ev, void *ev_data,
             char buf[100];
             dm.addr.port = d->c->rem.port;  // Save port
             d->c->rem = dm.addr;            // Copy resolved address
-            MG_DEBUG(("%lu %s resolved to %s", d->c->id, dm.name,
+            MG_DEBUG(("%lu %s is %s", d->c->id, dm.name,
                       mg_ntoa(&d->c->rem, buf, sizeof(buf))));
             mg_connect_resolved(d->c);
 #if MG_ENABLE_IPV6
@@ -1996,11 +1995,19 @@ void mg_iobuf_free(struct mg_iobuf *io) {
 
 
 
-#if MG_ENABLE_LOG
+static void logc(int c) {
+  putchar(c);
+}
+
+static void logs(const char *buf, size_t len) {
+  size_t i;
+  for (i = 0; i < len; i++) logc(buf[i]);
+}
+
 static void mg_log_stdout(const void *buf, size_t len, void *userdata) {
   (void) userdata, (void) buf, (void) len;
 #if MG_ENABLE_FILE
-  fwrite(buf, 1, len, stdout);
+  logs((const char *) buf, len);
 #endif
 }
 
@@ -2059,7 +2066,31 @@ void mg_log_set_callback(void (*fn)(const void *, size_t, void *), void *fnd) {
   s_fn = fn;
   s_fn_param = fnd;
 }
-#endif
+
+static unsigned char nibble(unsigned c) {
+  return (unsigned char) (c < 10 ? c + '0' : c + 'W');
+}
+
+#define ISPRINT(x) ((x) >= ' ' && (x) <= '~')
+void mg_hexdump(const void *buf, size_t len) {
+  const unsigned char *p = (const unsigned char *) buf;
+  unsigned char ascii[16], alen = 0;
+  size_t i;
+  for (i = 0; i < len; i++) {
+    if ((i % 16) == 0) {
+      // Print buffered ascii chars
+      if (i > 0) logs("  ", 2), logs((char *) ascii, 16), logc('\n'), alen = 0;
+      // Print hex address, then \t
+      logc(nibble((i >> 12) & 15)), logc(nibble((i >> 8) & 15)),
+          logc(nibble((i >> 4) & 15)), logc('0'), logs("   ", 3);
+    }
+    logc(nibble(p[i] >> 4)), logc(nibble(p[i] & 15));  // Two nibbles, e.g. c5
+    logc(' ');                                         // Space after hex number
+    ascii[alen++] = ISPRINT(p[i]) ? p[i] : '.';        // Add to the ascii buf
+  }
+  while (alen < 16) logs("   ", 3), ascii[alen++] = ' ';
+  logs("  ", 2), logs((char *) ascii, 16), logc('\n');
+}
 
 #ifdef MG_ENABLE_LINES
 #line 1 "src/md5.c"
@@ -2687,7 +2718,8 @@ bool mg_aton(struct mg_str str, struct mg_addr *addr) {
 }
 
 struct mg_connection *mg_alloc_conn(struct mg_mgr *mgr) {
-  struct mg_connection *c = (struct mg_connection *) calloc(1, sizeof(*c));
+  struct mg_connection *c =
+      (struct mg_connection *) calloc(1, sizeof(*c) + mgr->extraconnsize);
   if (c != NULL) {
     c->mgr = mgr;
     c->id = ++mgr->nextid;
@@ -2777,6 +2809,7 @@ void mg_mgr_free(struct mg_mgr *mgr) {
   struct mg_connection *c;
   struct mg_timer *tmp, *t = mgr->timers;
   while (t != NULL) tmp = t->next, free(t), t = tmp;
+  mgr->timers = NULL;  // Important. Next call to poll won't touch timers
   for (c = mgr->conns; c != NULL; c = c->next) c->is_closing = 1;
   mg_mgr_poll(mgr, 0);
 #if MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -3068,8 +3101,8 @@ static void sntp_cb(struct mg_connection *c, int ev, void *evd, void *fnd) {
     int64_t milliseconds = mg_sntp_parse(c->recv.buf, c->recv.len);
     if (milliseconds > 0) {
       mg_call(c, MG_EV_SNTP_TIME, (uint64_t *) &milliseconds);
-      MG_DEBUG(("%u.%u", (unsigned) (milliseconds / 1000),
-                (unsigned) (milliseconds % 1000)));
+      MG_VERBOSE(("%u.%u", (unsigned) (milliseconds / 1000),
+                  (unsigned) (milliseconds % 1000)));
     }
     c->recv.len = 0;  // Clear receive buffer
   } else if (ev == MG_EV_CONNECT) {
@@ -3087,7 +3120,7 @@ void mg_sntp_send(struct mg_connection *c, unsigned long utc) {
     uint8_t buf[48] = {0};
     buf[0] = (0 << 6) | (4 << 3) | 3;
     mg_send(c, buf, sizeof(buf));
-    MG_DEBUG(("%lu ct %lu", c->id, utc));
+    (void) utc;
   }
 }
 
@@ -3206,6 +3239,14 @@ bool mg_sock_conn_reset(void) {
 #endif
 }
 
+static void setlocaddr(SOCKET fd, struct mg_addr *addr) {
+  union usa usa;
+  socklen_t n = sizeof(usa);
+  if (getsockname(fd, &usa.sa, &n) == 0) {
+    tomgaddr(&usa, addr, n != sizeof(usa.sin));
+  }
+}
+
 static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
   if (n == 0) {
     // Do nothing
@@ -3216,17 +3257,16 @@ static void iolog(struct mg_connection *c, char *buf, long n, bool r) {
       union usa usa;
       char t1[50] = "", t2[50] = "";
       socklen_t slen = sizeof(usa.sin);
-      char *s = mg_hexdump(buf, (size_t) n);
       struct mg_addr a;
       memset(&usa, 0, sizeof(usa));
       memset(&a, 0, sizeof(a));
       if (getsockname(FD(c), &usa.sa, &slen) < 0) (void) 0;  // Ignore result
       tomgaddr(&usa, &a, c->rem.is_ip6);
-      MG_INFO(("\n-- %lu %s %s %s %s %ld\n%s", c->id,
+      MG_INFO(("\n-- %lu %s %s %s %s %ld", c->id,
                mg_straddr(&a, t1, sizeof(t1)), r ? "<-" : "->",
-               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n, s));
-      free(s);
-      (void) t1, (void) t2;  // Silence warnings for MG_ENABLE_LOG=0
+               mg_straddr(&c->rem, t2, sizeof(t2)), c->label, n));
+
+      mg_hexdump(buf, (size_t) n);
     }
     if (r) {
       struct mg_str evd = mg_str_n(buf, (size_t) n);
@@ -3246,6 +3286,7 @@ static long mg_sock_send(struct mg_connection *c, const void *buf, size_t len) {
     union usa usa;
     socklen_t slen = tousa(&c->rem, &usa);
     n = sendto(FD(c), (char *) buf, len, 0, &usa.sa, slen);
+    if (n > 0) setlocaddr(FD(c), &c->loc);
   } else {
     n = send(FD(c), (char *) buf, len, MSG_NONBLOCKING);
   }
@@ -3265,7 +3306,12 @@ bool mg_send(struct mg_connection *c, const void *buf, size_t len) {
 }
 
 static void mg_set_non_blocking_mode(SOCKET fd) {
-#if MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+#if defined(MG_CUSTOM_NONBLOCK)
+  MG_CUSTOM_NONBLOCK(fd);
+#elif MG_ARCH == MG_ARCH_WIN32 && MG_ENABLE_WINSOCK
+  unsigned long on = 1;
+  ioctlsocket(fd, FIONBIO, &on);
+#elif MG_ARCH == MG_ARCH_RTX
   unsigned long on = 1;
   ioctlsocket(fd, FIONBIO, &on);
 #elif MG_ARCH == MG_ARCH_FREERTOS_TCP
@@ -3294,7 +3340,7 @@ static void mg_set_non_blocking_mode(SOCKET fd) {
 
 bool mg_open_listener(struct mg_connection *c, const char *url) {
   SOCKET fd = INVALID_SOCKET;
-  int s_err = 0;  // Memoized socket error, in case closesocket() overrides it
+  bool success = false;
   c->loc.port = mg_htons(mg_url_port(url));
   if (!mg_aton(mg_url_host(url), &c->loc)) {
     MG_ERROR(("invalid listening URL: %s", url));
@@ -3306,52 +3352,47 @@ bool mg_open_listener(struct mg_connection *c, const char *url) {
     int proto = type == SOCK_DGRAM ? IPPROTO_UDP : IPPROTO_TCP;
     (void) on;
 
-    if ((fd = socket(af, type, proto)) != INVALID_SOCKET &&
-#if (MG_ARCH != MG_ARCH_WIN32 || !defined(SO_EXCLUSIVEADDRUSE)) && \
-    (!defined(LWIP_SOCKET) || (defined(LWIP_SOCKET) && SO_REUSE == 1))
-        // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
-        //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
-        //    SO_REUSEADDR allows to bind a socket to a port without error even
-        //    if the port is already open by another program. This is not the
-        //    behavior SO_REUSEADDR was designed for, and leads to hard-to-track
-        //    failure scenarios. Therefore, SO_REUSEADDR was disabled on Windows
-        //    unless SO_EXCLUSIVEADDRUSE is supported and set on a socket.
-        // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by
-        // defining
-        //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
-        //    but won't work! (setsockopt will return EINVAL)
-        !setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) &&
+    if ((fd = socket(af, type, proto)) == INVALID_SOCKET) {
+      MG_ERROR(("socket: %d", MG_SOCK_ERRNO));
+#if ((MG_ARCH == MG_ARCH_WIN32) || (MG_ARCH == MG_ARCH_UNIX) || \
+     (defined(LWIP_SOCKET) && SO_REUSE == 1))
+    } else if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *) &on,
+                          sizeof(on)) != 0) {
+      // 1. SO_RESUSEADDR is not enabled on Windows because the semantics of
+      //    SO_REUSEADDR on UNIX and Windows is different. On Windows,
+      //    SO_REUSEADDR allows to bind a socket to a port without error even
+      //    if the port is already open by another program. This is not the
+      //    behavior SO_REUSEADDR was designed for, and leads to hard-to-track
+      //    failure scenarios. Therefore, SO_REUSEADDR was disabled on Windows
+      //    unless SO_EXCLUSIVEADDRUSE is supported and set on a socket.
+      // 2. In case of LWIP, SO_REUSEADDR should be explicitly enabled, by
+      // defining
+      //    SO_REUSE (in lwipopts.h), otherwise the code below will compile
+      //    but won't work! (setsockopt will return EINVAL)
+      MG_ERROR(("reuseaddr: %d", MG_SOCK_ERRNO));
 #endif
 #if MG_ARCH == MG_ARCH_WIN32 && defined(SO_EXCLUSIVEADDRUSE) && !defined(WINCE)
-        // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
-        //! setsockopt(fd, SOL_SOCKET, SO_BROADCAST, (char *) &on, sizeof(on))
-        //! &&
-        !setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
-                    sizeof(on)) &&
+    } else if (setsockopt(fd, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, (char *) &on,
+                          sizeof(on)) != 0) {
+      // "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"
+      MG_ERROR(("exclusiveaddruse: %s", MG_SOCK_ERRNO));
 #endif
-        bind(fd, &usa.sa, slen) == 0 &&
-        // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
-        (type == SOCK_DGRAM || listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0)) {
+    } else if (bind(fd, &usa.sa, slen) != 0) {
+      MG_ERROR(("bind: %d", MG_SOCK_ERRNO));
+    } else if ((type == SOCK_STREAM &&
+                listen(fd, MG_SOCK_LISTEN_BACKLOG_SIZE) != 0)) {
+      // NOTE(lsm): FreeRTOS uses backlog value as a connection limit
       // In case port was set to 0, get the real port number
-      if (getsockname(fd, &usa.sa, &slen) == 0) {
-        c->loc.port = usa.sin.sin_port;
-#if MG_ENABLE_IPV6
-        if (c->loc.is_ip6) c->loc.port = usa.sin6.sin6_port;
-#endif
-      }
+      MG_ERROR(("listen: %d", MG_SOCK_ERRNO));
+    } else {
+      setlocaddr(fd, &c->loc);
       mg_set_non_blocking_mode(fd);
-    } else if (fd != INVALID_SOCKET) {
-      s_err = MG_SOCK_ERRNO;
-      closesocket(fd);
-      fd = INVALID_SOCKET;
+      c->fd = S2PTR(fd);
+      success = true;
     }
   }
-  c->fd = S2PTR(fd);
-  if (fd == INVALID_SOCKET) {
-    if (s_err == 0) s_err = MG_SOCK_ERRNO;
-    MG_ERROR(("failed %s, errno %d (%s)", url, s_err, strerror(s_err)));
-  }
-  return fd != INVALID_SOCKET;
+  if (success == false && fd != INVALID_SOCKET) closesocket(fd);
+  return success;
 }
 
 static long mg_sock_recv(struct mg_connection *c, void *buf, size_t len) {
@@ -3417,29 +3458,9 @@ static void setsockopts(struct mg_connection *c) {
 #endif
   if (setsockopt(FD(c), SOL_TCP, TCP_NODELAY, (char *) &on, sizeof(on)) != 0)
     (void) 0;
-#if defined(TCP_QUICKACK)
-  if (setsockopt(FD(c), SOL_TCP, TCP_QUICKACK, (char *) &on, sizeof(on)) != 0)
-    (void) 0;
-#endif
   if (setsockopt(FD(c), SOL_SOCKET, SO_KEEPALIVE, (char *) &on, sizeof(on)) !=
       0)
     (void) 0;
-#if (defined(ESP32) && ESP32) || (defined(ESP8266) && ESP8266) || \
-    defined(__linux__)
-  int idle = 60;
-  if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle)) != 0)
-    (void) 0;
-#endif
-#if MG_ARCH != MG_ARCH_WIN32 && !defined(__QNX__) && MG_ARCH != MG_ARCH_ZEPHYR
-  {
-    int cnt = 3, intvl = 20;
-    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt)) != 0)
-      (void) 0;
-    if (setsockopt(FD(c), IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl)) !=
-        0)
-      (void) 0;
-  }
-#endif
 #endif
 }
 
@@ -3476,6 +3497,7 @@ void mg_connect_resolved(struct mg_connection *c) {
 static SOCKET raccept(SOCKET sock, union usa *usa, socklen_t len) {
   SOCKET s = INVALID_SOCKET;
   do {
+    memset(usa, 0, sizeof(*usa));
     s = accept(sock, &usa->sa, &len);
   } while (s == INVALID_SOCKET && errno == EINTR);
   return s;
@@ -3489,8 +3511,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
   if (fd == INVALID_SOCKET) {
 #if MG_ARCH == MG_ARCH_AZURERTOS
     // AzureRTOS, in non-block socket mode can mark listening socket readable
-    // even it is not. See comment for 'select' func implementation in nx_bsd.c
-    // That's not an error, just should try later
+    // even it is not. See comment for 'select' func implementation in
+    // nx_bsd.c That's not an error, just should try later
     if (MG_SOCK_ERRNO != EAGAIN)
 #endif
       MG_ERROR(("%lu accept failed, errno %d", lsn->id, MG_SOCK_ERRNO));
@@ -3513,8 +3535,8 @@ static void accept_conn(struct mg_mgr *mgr, struct mg_connection *lsn) {
     setsockopts(c);
     c->is_accepted = 1;
     c->is_hexdumping = lsn->is_hexdumping;
-    c->pfn = lsn->pfn;
     c->loc = lsn->loc;
+    c->pfn = lsn->pfn;
     c->pfn_data = lsn->pfn_data;
     c->fn = lsn->fn;
     c->fn_data = lsn->fn_data;
@@ -3535,7 +3557,8 @@ static bool mg_socketpair(SOCKET sp[2], union usa usa[2]) {
   usa[1] = usa[0];
 
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
-      bind(sock, &usa[0].sa, len) == 0 && listen(sock, 3) == 0 &&
+      bind(sock, &usa[0].sa, len) == 0 &&
+      listen(sock, MG_SOCK_LISTEN_BACKLOG_SIZE) == 0 &&
       getsockname(sock, &usa[0].sa, &len) == 0 &&
       (sp[0] = socket(AF_INET, SOCK_STREAM, 0)) != INVALID_SOCKET &&
       connect(sp[0], &usa[0].sa, len) == 0 &&
@@ -3624,7 +3647,7 @@ static void mg_iotest(struct mg_mgr *mgr, int ms) {
 
 static void connect_conn(struct mg_connection *c) {
   int rc = 0;
-#if MG_ARCH != MG_ARCH_FREERTOS_TCP
+#if (MG_ARCH != MG_ARCH_FREERTOS_TCP) && (MG_ARCH != MG_ARCH_RTX)
   socklen_t len = sizeof(rc);
   if (getsockopt(FD(c), SOL_SOCKET, SO_ERROR, (char *) &rc, &len)) rc = 1;
 #endif
@@ -3944,33 +3967,6 @@ size_t mg_snprintf(char *buf, size_t len, const char *fmt, ...) {
   return n;
 }
 
-char *mg_hexdump(const void *buf, size_t len) {
-  const unsigned char *p = (const unsigned char *) buf;
-  size_t i, idx, n = 0, ofs = 0, dlen = len * 5 + 100;
-  char ascii[17] = "", *dst = (char *) calloc(1, dlen);
-  if (dst == NULL) return dst;
-  for (i = 0; i < len; i++) {
-    idx = i % 16;
-    if (idx == 0) {
-      if (i > 0 && dlen > n)
-        n += mg_snprintf(dst + n, dlen - n, "  %s\n", ascii);
-      if (dlen > n)
-        n += mg_snprintf(dst + n, dlen - n, "%04x ", (int) (i + ofs));
-    }
-    if (dlen < n) break;
-    n += mg_snprintf(dst + n, dlen - n, " %02x", p[i]);
-    ascii[idx] = (char) (p[i] < 0x20 || p[i] > 0x7e ? '.' : p[i]);
-    ascii[idx + 1] = '\0';
-  }
-  while (i++ % 16) {
-    if (n < dlen) n += mg_snprintf(dst + n, dlen - n, "%s", "   ");
-  }
-  if (n < dlen) n += mg_snprintf(dst + n, dlen - n, "  %s\n", ascii);
-  if (n > dlen - 1) n = dlen - 1;
-  dst[n] = '\0';
-  return dst;
-}
-
 char *mg_hex(const void *buf, size_t len, char *to) {
   const unsigned char *p = (const unsigned char *) buf;
   const char *hex = "0123456789abcdef";
@@ -4176,12 +4172,13 @@ size_t mg_vsnprintf(char *buf, size_t len, const char *fmt, va_list ap) {
 
 
 
+#define MG_TIMER_CALLED 4
+
 void mg_timer_init(struct mg_timer **head, struct mg_timer *t, uint64_t ms,
                    unsigned flags, void (*fn)(void *), void *arg) {
   struct mg_timer tmp = {ms, 0U, 0U, flags, fn, arg, *head};
   *t = tmp;
   *head = t;
-  if (flags & MG_TIMER_RUN_NOW) fn(arg);
 }
 
 void mg_timer_free(struct mg_timer **head, struct mg_timer *t) {
@@ -4196,14 +4193,21 @@ void mg_timer_poll(struct mg_timer **head, uint64_t now_ms) {
     tmp = t->next;
     if (t->prev_ms > now_ms) t->expire = 0;  // Handle time wrap
     t->prev_ms = now_ms;
-    if (t->expire == 0) t->expire = now_ms + t->period_ms;
+    if (t->expire == 0 && (t->flags & MG_TIMER_RUN_NOW) &&
+        !(t->flags & MG_TIMER_CALLED)) {
+      // Handle MG_TIMER_NOW only once
+    } else if (t->expire == 0) {
+      t->expire = now_ms + t->period_ms;
+    }
     if (t->expire > now_ms) continue;
-    t->fn(t->arg);
+    if ((t->flags & MG_TIMER_REPEAT) || !(t->flags & MG_TIMER_CALLED)) {
+      t->fn(t->arg);
+    }
+    t->flags |= MG_TIMER_CALLED;
     // Try to tick timers with the given period as accurate as possible,
     // even if this polling function is called with some random period.
     t->expire = now_ms - t->expire > t->period_ms ? now_ms + t->period_ms
                                                   : t->expire + t->period_ms;
-    if (!(t->flags & MG_TIMER_REPEAT)) mg_timer_free(head, t);
   }
 }
 
